@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.png" width="112" alt="UltraGMonitor" /></p>
+
 # UltraGMonitor
 
 Monitor de hardware pro Windows que fica num canto da tela ou por cima do jogo: relógio, dia, clima, FPS, CPU, GPU, RAM e SSD.
@@ -42,7 +44,7 @@ Pra gerar o instalador:
 npm run dist
 ```
 
-O instalador sai em `dist/`.
+O instalador sai em `dist/`. Pra regenerar os ícones depois de mexer em `assets/logo.svg` ou `assets/logo-mark.svg`, rode `npm run icons`.
 
 ## Como funciona
 

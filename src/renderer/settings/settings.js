@@ -70,6 +70,11 @@ function fitPreviews() {
   for (const btn of document.querySelectorAll('.font-grid button')) fitPreview(btn);
 }
 
+function fitPreviewsWhenLoaded() {
+  const loads = fonts.list.map((f) => document.fonts.load(`13px ${f.family}`, 'UltraGMonitor').catch(() => null));
+  Promise.all(loads).then(() => requestAnimationFrame(fitPreviews));
+}
+
 function fontGrid(id, part, group) {
   const grid = $(id);
   if (!grid.children.length) {
@@ -353,6 +358,7 @@ function layoutColumns() {
     if (count > 1) sections[b - 1].classList.add('grow');
   });
   main.replaceChildren(...columns);
+  requestAnimationFrame(fitPreviews);
 }
 
 function scheduleLayout() {
@@ -468,7 +474,7 @@ async function init() {
       scheduleLayout();
     }
   });
-  fitPreviews();
+  fitPreviewsWhenLoaded();
 }
 
 init();

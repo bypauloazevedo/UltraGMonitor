@@ -12,6 +12,7 @@
     "start": "electron .",
     "setup": "node scripts/fetch-deps.js && npm run build:sensor",
     "build:sensor": "node scripts/build-sensor.js",
+    "icons": "electron scripts/make-icons.js",
     "dist": "node scripts/dist.js"
   },
   "dependencies": {
