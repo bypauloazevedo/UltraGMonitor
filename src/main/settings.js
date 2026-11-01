@@ -7,6 +7,7 @@ const DEFAULTS = {
   theme: 'system',
   layout: 'card',
   cardLayout: 'grid',
+  compactLayout: 'list',
   scale: 1,
   scales: {},
   opacity: 0.82,

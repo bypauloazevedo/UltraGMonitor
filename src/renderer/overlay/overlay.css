@@ -155,7 +155,7 @@ body.peek #hud {
   margin: 0.2em 0 0 0.45em;
 }
 
-.day {
+.top .day {
   margin-top: 0.75rem;
   font-family: var(--date-font);
   font-size: calc(1.15rem * var(--date-size));
@@ -550,32 +550,87 @@ body.peek #hud {
   align-items: center;
 }
 
-.mini:not(.bar) .row {
+.mini:not(.bar) > .row {
   display: contents;
 }
 
-.mini:not(.bar) .row > .k {
+.mini:not(.bar) > .row > .k {
   grid-column: 1;
 }
 
-.mini:not(.bar) .row > .v {
+.mini:not(.bar) > .row > .v {
   grid-column: 2;
   justify-self: end;
 }
 
-.mini:not(.bar) .row > .v2 {
+.mini:not(.bar) > .row > .v2 {
   grid-column: 3;
   justify-self: start;
 }
 
-.mini:not(.bar) .row.time > .v,
-.mini:not(.bar) .row.day > .v {
+.mini:not(.bar) .foot {
   grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.mini:not(.bar) > .row + .foot {
+  margin-top: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, calc(0.07 * var(--bg-alpha) + 0.03));
+}
+
+.mini:not(.bar) .foot .row {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+}
+
+.mini:not(.bar) .foot .row > * {
+  line-height: 1;
+}
+
+.mini.compact-tall {
+  grid-template-columns: auto auto;
+  column-gap: 0.8rem;
+  row-gap: 0.05rem;
+}
+
+.mini.compact-tall > .row > .k {
+  grid-column: 1 / -1;
+  margin-top: 0.4rem;
+}
+
+.mini.compact-tall > .row:first-child > .k {
+  margin-top: 0;
+}
+
+.mini.compact-tall > .row > .v {
+  grid-column: 1;
+  justify-self: start;
+  font-size: calc(1.15rem * var(--metrics-size));
+}
+
+.mini.compact-tall > .row > .v .stable > span {
   justify-self: start;
 }
 
-.mini:not(.bar) .row.time > .v {
-  margin-top: 0.3rem;
+.mini.compact-tall > .row > .v2 {
+  grid-column: 2;
+  justify-self: end;
+}
+
+.mini.compact-tall .foot {
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.mini.compact-tall .foot .row.time > .v {
+  font-size: calc(1.7rem * var(--clock-size));
+  line-height: 1;
 }
 
 .mini.bar {
@@ -591,6 +646,86 @@ body.peek #hud {
   display: flex;
   align-items: center;
   gap: 0.45em;
+}
+
+.mini.bar .foot {
+  display: contents;
+}
+
+@keyframes fps-open-y {
+  from {
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 8em;
+  }
+}
+
+@keyframes fps-close-y {
+  from {
+    opacity: 1;
+    max-height: 8em;
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+@keyframes fps-open-x {
+  from {
+    opacity: 0;
+    max-width: 0;
+  }
+  to {
+    opacity: 1;
+    max-width: 20em;
+  }
+}
+
+@keyframes fps-close-x {
+  from {
+    opacity: 1;
+    max-width: 20em;
+  }
+  to {
+    opacity: 0;
+    max-width: 0;
+  }
+}
+
+.card .is-fps.fps-in,
+.mini:not(.bar) > .is-fps.fps-in > * {
+  overflow: hidden;
+  animation: fps-open-y 0.3s ease-out both;
+}
+
+.card .is-fps.fps-out,
+.mini:not(.bar) > .is-fps.fps-out > * {
+  overflow: hidden;
+  animation: fps-close-y 0.3s ease-in both;
+}
+
+.mini.bar > .is-fps.fps-in,
+.dock > .is-fps.fps-in {
+  overflow: hidden;
+  animation: fps-open-x 0.3s ease-out both;
+}
+
+.mini.bar > .is-fps.fps-out,
+.dock > .is-fps.fps-out {
+  overflow: hidden;
+  animation: fps-close-x 0.3s ease-in both;
 }
 
 .row > * {
@@ -945,6 +1080,49 @@ body.handle-on .handle {
 
 .tb-ok:hover {
   filter: brightness(1.1);
+}
+
+.tb-range {
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.1em 0.4em;
+  font-family: var(--font);
+  font-size: 0.76em;
+  font-weight: 600;
+  color: #c9d1dc;
+  cursor: default;
+}
+
+.tb-range input {
+  -webkit-app-region: no-drag;
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 0.32em;
+  margin: 0.6em 0;
+  border-radius: 99px;
+  background: linear-gradient(to right, var(--accent) var(--fill, 50%), rgba(255, 255, 255, 0.14) var(--fill, 50%));
+  outline: none;
+  cursor: pointer;
+}
+
+.tb-range input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 1.15em;
+  height: 1.15em;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 0.25em rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+.tb-range output {
+  min-width: 2.6em;
+  text-align: right;
+  color: #e6ebf2;
 }
 
 .tb-hint {

@@ -3,8 +3,8 @@ window.HudFmt = (() => {
   const round = (v) => (has(v) ? String(Math.round(v)) : '—');
   const temp = (v) => (has(v) ? `${Math.round(v)}°` : '—');
   const fixed = (v, digits = 1) => (has(v) ? v.toFixed(digits) : '—');
-  const level = (v, warn, hot) => (!has(v) ? '' : v >= hot ? 'hot' : v >= warn ? 'warn' : '');
-  const lowLevel = (v, warn, hot) => (!has(v) ? '' : v <= hot ? 'hot' : v <= warn ? 'warn' : '');
+  const level = (v, warn, hot) => (!has(v) ? '' : Math.round(v) >= hot ? 'hot' : Math.round(v) >= warn ? 'warn' : '');
+  const lowLevel = (v, warn, hot) => (!has(v) ? '' : Math.round(v) <= hot ? 'hot' : Math.round(v) <= warn ? 'warn' : '');
   const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
   const rate = (bytes) => {

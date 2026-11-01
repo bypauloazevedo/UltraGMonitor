@@ -6,7 +6,7 @@ const ui = icons.ui;
 const root = document.getElementById('hud');
 
 const TEMP = { cpu: [80, 90], gpu: [78, 85], disk: [55, 65] };
-const LOAD = [75, 92];
+const LOAD = [65, 80];
 const LABELS = { cpu: 'CPU', gpu: 'GPU', ram: 'RAM', disk: 'SSD' };
 const SECOND_ICONS = { cpu: ui.thermo, gpu: ui.thermo, ram: ui.memory, disk: ui.thermo };
 const MINI_PLACEHOLDERS = {
@@ -24,6 +24,10 @@ let dock = { height: 48, light: false };
 let structureKey = '';
 let lastIcon = '';
 let resizing = false;
+let sliding = false;
+let fpsLive = false;
+let fpsEnter = false;
+let fpsHideTimer = 0;
 
 function isDock() {
   return settings.layout === 'dock';
@@ -36,6 +40,10 @@ function pickDisk(list) {
 
 function showFps() {
   return settings.modules.fps && settings.fpsEnabled;
+}
+
+function fpsVisible() {
+  return showFps() && fpsLive;
 }
 
 function metricKeys() {
@@ -82,6 +90,10 @@ function grip() {
 
 function cardLayout() {
   return ['list', 'tall'].includes(settings.cardLayout) ? settings.cardLayout : 'grid';
+}
+
+function compactLayout() {
+  return settings.compactLayout === 'tall' ? 'tall' : 'list';
 }
 
 function hasMedia() {
@@ -139,13 +151,13 @@ function buildCard() {
     parts.push(`<div class="top"><div>${left.join('')}</div>${right}</div>`);
   }
   const keys = metricKeys();
-  const hasBottom = showFps() || keys.length;
+  const hasBottom = fpsVisible() || keys.length;
   if (hasTop && hasBottom) parts.push('<div class="rule"></div>');
   if (hasBottom) {
     const inner = [];
-    if (showFps()) {
+    if (fpsVisible()) {
       inner.push(`
-        <div class="fps">
+        <div class="fps is-fps">
           <div class="fps-app" data-k="fps.app"></div>
           <div class="fps-main" data-k="fps.tone"><span class="ico">${ui.fps}</span><span class="fps-value num">${stable('888', 'fps.value', true)}</span><span class="fps-unit">FPS</span></div>
           <div class="fps-detail num">${stable('1% 888 · 88.8 ms', 'fps.detail', true)}</div>
@@ -163,7 +175,7 @@ function row(key) {
   const icon = SECOND_ICONS[key];
   const name = key === 'fps' ? '<span class="lbl">FPS</span>' : label(key);
   const v2 = `<span class="v2" data-k="${key}.mini2box" hidden>${icon ? `<span class="ico">${icon}</span>` : ''}${stable(ph2, `${key}.mini2`)}</span>`;
-  return `<div class="row" data-k="${key}.tone"><span class="k"><span class="ico">${key === 'fps' ? ui.fps : ui[key]}</span>${name}</span><span class="v">${stable(ph, `${key}.mini`, true)}</span>${v2}</div>`;
+  return `<div class="row${key === 'fps' ? ' is-fps' : ''}" data-k="${key}.tone"><span class="k"><span class="ico">${key === 'fps' ? ui.fps : ui[key]}</span>${name}</span><span class="v">${stable(ph, `${key}.mini`, true)}</span>${v2}</div>`;
 }
 
 function buildMini() {
@@ -175,17 +187,19 @@ function buildMini() {
     ? `<div class="row weather"><span class="k"><span class="ico" data-k="wx.icon"></span></span><span class="v num">${stable('-88°', 'wx.temp', true)}</span><span class="v2" data-k="wx.minirain"></span></div>`
     : '';
   const metrics = [];
-  if (showFps()) metrics.push(row('fps'));
+  if (fpsVisible()) metrics.push(row('fps'));
   for (const key of metricKeys()) metrics.push(row(key));
-  const items = isBar ? [time, day, wx, ...metrics] : [...metrics, time, day, wx];
+  const foot = [time, day, wx].filter(Boolean).join('');
+  const footHtml = foot ? `<div class="foot">${foot}</div>` : '';
+  const items = isBar ? [footHtml, ...metrics] : [...metrics, footHtml];
   const html = items.filter(Boolean).join('') || '<div class="row"><span class="k">UltraG</span></div>';
-  return `<div class="${surfaceClass(`mini${isBar ? ' bar' : ''}`)}">${media()}${html}${grip()}</div>`;
+  return `<div class="${surfaceClass(isBar ? 'mini bar' : `mini compact-${compactLayout()}`)}">${media()}${html}${grip()}</div>`;
 }
 
 function dockItem(key) {
   const [ph, ph2] = MINI_PLACEHOLDERS[key];
   return `
-    <div class="dk" data-k="${key}.tone">
+    <div class="dk${key === 'fps' ? ' is-fps' : ''}" data-k="${key}.tone">
       <span class="ico dk-ico">${key === 'fps' ? ui.fps : ui[key]}</span>
       <div class="dk-text">
         <div class="dk-top num">${stable(ph, `${key}.mini`, true)}<span class="dk-second" data-k="${key}.mini2box" hidden>${stable(ph2, `${key}.mini2`)}</span></div>
@@ -206,7 +220,7 @@ function buildDock() {
         </div>
       </div>`);
   }
-  if (showFps()) items.push(dockItem('fps'));
+  if (fpsVisible()) items.push(dockItem('fps'));
   for (const key of metricKeys()) items.push(dockItem(key));
   if (!items.length) items.push('<div class="dk"><div class="dk-sub">UltraGMonitor</div></div>');
   const tools = settings.locked
@@ -226,6 +240,7 @@ function toolbar() {
     ['bar', 'Barra'],
   ];
   const buttons = layouts.map(([value, label]) => `<button data-layout="${value}"${settings.layout === value ? ' class="on"' : ''}>${t(label)}</button>`).join('');
+  const opacity = Math.round(settings.opacity * 100);
   return `
     <div class="toolbar">
       <div class="tb-row">
@@ -233,8 +248,22 @@ function toolbar() {
         <button class="tb-icon" data-action="settings" title="${t('Configurações')}">${ui.gear}</button>
         <button class="tb-ok" data-action="done"><span class="ico">${ui.check}</span>${t('Pronto')}</button>
       </div>
+      <label class="tb-range">
+        <span>${t('Fundo')}</span>
+        <input type="range" min="0" max="1" step="0.05" value="${settings.opacity}" style="--fill:${opacity}%" />
+        <output class="num" data-k="tb.opacity">${opacity}%</output>
+      </label>
       <div class="tb-hint">${t('Arraste pra mover · puxe o canto pra mudar o tamanho · solte na barra de tarefas pra virar Dock')}</div>
     </div>`;
+}
+
+function syncToolbar() {
+  const range = root.querySelector('.tb-range input');
+  if (!range || sliding) return;
+  const opacity = Math.round(settings.opacity * 100);
+  range.value = settings.opacity;
+  range.style.setProperty('--fill', `${opacity}%`);
+  text('tb.opacity', `${opacity}%`);
 }
 
 function reportHandle() {
@@ -249,7 +278,7 @@ function reportHandle() {
 
 function build() {
   const bg = settings.background || {};
-  const key = JSON.stringify([settings.language, settings.layout, cardLayout(), settings.modules, settings.fpsEnabled, settings.showSeconds, settings.clock24h, !!settings.city, settings.locked, anchor(), bg.file, dock.light, hwMode()]);
+  const key = JSON.stringify([settings.language, settings.layout, cardLayout(), compactLayout(), settings.modules, settings.fpsEnabled, fpsLive, settings.showSeconds, settings.clock24h, !!settings.city, settings.locked, anchor(), bg.file, dock.light, hwMode()]);
   if (key === structureKey) return;
   structureKey = key;
   lastIcon = '';
@@ -260,10 +289,46 @@ function build() {
     if (settings.locked) surface.insertAdjacentHTML('beforeend', handle());
     else root.insertAdjacentHTML('beforeend', toolbar());
   }
+  if (fpsEnter) {
+    fpsEnter = false;
+    for (const el of root.querySelectorAll('.is-fps')) {
+      el.classList.add('fps-in');
+      el.addEventListener('animationend', () => el.classList.remove('fps-in'), { once: true });
+    }
+  }
   updateClock();
   updateWeather();
   updateSensors();
   requestAnimationFrame(reportHandle);
+}
+
+function hasFpsValue() {
+  return !!(sensors && sensors.fps && fmt.has(sensors.fps.value));
+}
+
+function syncFps() {
+  if (hasFpsValue()) {
+    clearTimeout(fpsHideTimer);
+    fpsHideTimer = 0;
+    for (const el of root.querySelectorAll('.is-fps.fps-out')) el.classList.remove('fps-out');
+    if (!fpsLive) {
+      fpsLive = true;
+      fpsEnter = true;
+      build();
+    }
+    return;
+  }
+  if (!fpsLive || fpsHideTimer) return;
+  fpsHideTimer = setTimeout(() => {
+    const items = root.querySelectorAll('.is-fps');
+    for (const el of items) el.classList.add('fps-out');
+    setTimeout(() => {
+      fpsHideTimer = 0;
+      if (hasFpsValue()) return;
+      fpsLive = false;
+      build();
+    }, items.length ? 300 : 0);
+  }, 3000);
 }
 
 function each(key, fn) {
@@ -403,7 +468,7 @@ function updateSensors() {
 
   setMetric('ram', {
     value: ram.load,
-    level: fmt.level(ram.load, 80, 92),
+    level: fmt.level(ram.load, ...LOAD),
     extra: [[ui.memory, fmt.has(ram.used) && `${ram.used.toFixed(1)} / ${Math.round(ram.total)} GB`]],
     mini2: fmt.has(ram.used) ? `${ram.used.toFixed(1)}G` : '',
   });
@@ -521,6 +586,29 @@ root.addEventListener('pointerdown', (event) => {
   handle.addEventListener('pointercancel', onUp);
 });
 
+root.addEventListener('pointerdown', (event) => {
+  if (!event.target.closest('.tb-range input')) return;
+  sliding = true;
+  const stop = () => {
+    sliding = false;
+    window.removeEventListener('pointerup', stop);
+    window.removeEventListener('pointercancel', stop);
+  };
+  window.addEventListener('pointerup', stop);
+  window.addEventListener('pointercancel', stop);
+});
+
+root.addEventListener('input', (event) => {
+  const range = event.target.closest('.tb-range input');
+  if (!range) return;
+  const value = Number(range.value);
+  const opacity = Math.round(value * 100);
+  range.style.setProperty('--fill', `${opacity}%`);
+  text('tb.opacity', `${opacity}%`);
+  document.documentElement.style.setProperty('--bg-alpha', String(value));
+  window.hud.setSettings({ opacity: value });
+});
+
 root.addEventListener('click', (event) => {
   const layout = event.target.closest('[data-layout]');
   if (layout) {
@@ -543,6 +631,7 @@ new ResizeObserver(() => {
 async function init() {
   settings = await window.hud.getSettings();
   sensors = await window.hud.lastSensors();
+  fpsLive = hasFpsValue();
   weather = await window.hud.lastWeather();
   dock = { ...dock, ...(await window.hud.dockInfo()) };
   applyTheme();
@@ -553,10 +642,12 @@ async function init() {
     settings = next;
     applyTheme();
     build();
+    syncToolbar();
     updateSensors();
   });
   window.hud.onSensors((data) => {
     sensors = data;
+    syncFps();
     updateSensors();
   });
   window.hud.onWeather((data) => {

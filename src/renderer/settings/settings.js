@@ -44,6 +44,8 @@ function renderVisual() {
   markSegmented('layout', settings.layout);
   markSegmented('cardLayout', settings.cardLayout || 'grid');
   $('card-layout-field').hidden = settings.layout !== 'card';
+  markSegmented('compactLayout', settings.compactLayout || 'list');
+  $('compact-layout-field').hidden = settings.layout !== 'compact';
   setRange('scale', settings.scale, `${Math.round(settings.scale * 100)}%`);
   setRange('opacity', settings.opacity, `${Math.round(settings.opacity * 100)}%`);
 }
@@ -596,7 +598,7 @@ function bind() {
     fitPreviews();
     scheduleLayout();
   });
-  for (const id of ['language', 'theme', 'cardLayout']) {
+  for (const id of ['language', 'theme', 'cardLayout', 'compactLayout']) {
     $(id).addEventListener('click', (e) => {
       const btn = e.target.closest('button');
       if (btn) save({ [id]: btn.dataset.value });
