@@ -2,6 +2,7 @@ const { app, dialog, protocol, net } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { t } = require('../renderer/shared/i18n');
 
 const SCHEME = 'ugm';
 const IMAGES = ['gif', 'webp', 'png', 'apng', 'jpg', 'jpeg'];
@@ -29,9 +30,9 @@ function serve(getBackground) {
 
 async function choose(parent) {
   const result = await dialog.showOpenDialog(parent, {
-    title: 'Escolher fundo animado',
+    title: t('Escolher fundo animado'),
     properties: ['openFile'],
-    filters: [{ name: 'GIF, imagem ou vídeo', extensions: [...IMAGES, ...VIDEOS] }],
+    filters: [{ name: t('GIF, imagem ou vídeo'), extensions: [...IMAGES, ...VIDEOS] }],
   });
   if (result.canceled || !result.filePaths[0]) return null;
   const source = result.filePaths[0];

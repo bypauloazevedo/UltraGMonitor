@@ -246,16 +246,17 @@ body.peek #hud {
 
 .metrics {
   min-width: 24.15em;
-  contain: inline-size;
   font-size: calc(1rem * var(--metrics-size));
 }
 
 .fps {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.75em;
-  padding: 0.65em 0.85em;
-  margin-bottom: 0.55em;
+  padding: 0.95em 0.85em 0.65em;
+  margin: 0.9em 0 0.55em;
   border-radius: 0.95em;
   background: var(--panel);
 }
@@ -289,23 +290,32 @@ body.peek #hud {
   margin-bottom: 0.2em;
 }
 
-.fps-meta {
-  flex: 1;
-  min-width: 0;
-  text-align: right;
-  line-height: 1.35;
-}
-
 .fps-app {
-  font-size: 0.95em;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+  max-width: 80%;
+  padding: 0.18em 0.75em;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 22%, #12151c);
+  color: var(--accent);
+  font-size: 0.82em;
   font-weight: 600;
-  color: var(--text);
+  letter-spacing: 0.04em;
+  line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.fps-app:empty {
+  display: none;
+}
+
 .fps-detail {
+  align-self: flex-end;
+  margin-bottom: 0.2em;
   font-size: 0.86em;
   font-weight: 500;
   color: var(--muted);
@@ -329,12 +339,14 @@ body.peek #hud {
   justify-content: space-between;
   align-items: center;
   gap: 0.5em;
+  min-width: 0;
 }
 
 .tile-name {
   display: flex;
   align-items: center;
   gap: 0.4em;
+  min-width: 0;
   font-size: 0.8em;
   font-weight: 650;
   letter-spacing: 0.12em;
@@ -348,6 +360,7 @@ body.peek #hud {
 
 .chip {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 0.2em;
   font-family: var(--metrics-font);
@@ -378,6 +391,7 @@ body.peek #hud {
 .tile-value {
   display: flex;
   align-items: baseline;
+  min-width: 4ch;
   margin-top: 0.4em;
   font-family: var(--metrics-font);
   font-size: 1.75em;
@@ -413,6 +427,7 @@ body.peek #hud {
 }
 
 .tile-extra {
+  contain: inline-size;
   display: flex;
   align-items: center;
   gap: 0.5em;
@@ -434,6 +449,91 @@ body.peek #hud {
 .tile-extra .ico {
   font-size: 1.05em;
   color: var(--dim);
+}
+
+.card-grid .tiles > .tile:last-child:nth-child(odd),
+.card-list .tile,
+.card-tall .tile {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.7em;
+  align-items: center;
+}
+
+.card-grid .tiles > .tile:last-child:nth-child(odd) .tile-head,
+.card-list .tile-head,
+.card-tall .tile-head {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.card-grid .tiles > .tile:last-child:nth-child(odd) .tile-value,
+.card-list .tile-value,
+.card-tall .tile-value {
+  grid-column: 2;
+  grid-row: 1;
+  justify-content: flex-end;
+  margin-top: 0;
+  font-size: 1.5em;
+}
+
+.card-grid .tiles > .tile:last-child:nth-child(odd) .meter,
+.card-list .meter,
+.card-tall .meter {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.card-grid .tiles > .tile:last-child:nth-child(odd) .tile-extra,
+.card-list .tile-extra,
+.card-tall .tile-extra {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-top: 0.4em;
+}
+
+.card-list .tiles,
+.card-tall .tiles {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45em;
+}
+
+.card-list .tile,
+.card-tall .tile {
+  padding: 0.6em 0.75em 0.65em;
+}
+
+.card-tall {
+  min-width: 0;
+}
+
+.card-tall .metrics {
+  min-width: 14.7em;
+}
+
+.card-tall .top {
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.card-tall .wx {
+  align-items: flex-start;
+}
+
+.card-tall .wx-meta,
+.card-tall .wx-empty {
+  text-align: left;
+}
+
+.card-tall .fps {
+  flex-direction: column;
+  gap: 0.3em;
+}
+
+.card-tall .fps-detail {
+  align-self: center;
+  margin: 0;
 }
 
 .mini {

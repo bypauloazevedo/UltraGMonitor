@@ -1,4 +1,5 @@
 const { EventEmitter } = require('events');
+const i18n = require('../renderer/shared/i18n');
 
 const CODES = {
   0: ['Céu limpo', 'clear'],
@@ -42,7 +43,7 @@ async function getJson(url) {
 async function searchCity(query) {
   const q = String(query || '').trim();
   if (q.length < 2) return [];
-  const data = await getJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=pt&format=json`);
+  const data = await getJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=${i18n.lang()}&format=json`);
   return (data.results || []).map((r) => ({
     name: r.name,
     admin1: r.admin1 || '',

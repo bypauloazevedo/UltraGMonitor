@@ -29,6 +29,7 @@ class Sensors extends EventEmitter {
     this.stopping = false;
     this.crashes = 0;
     this.restartTimer = null;
+    this.shots = new Map();
     this.electronAdmin = processIsAdmin();
     this.status = { running: false, elevated: false, elevationDenied: false, missing: false };
   }
@@ -110,6 +111,12 @@ class Sensors extends EventEmitter {
           if (data.type === 'sensors') {
             this.crashes = 0;
             this.emit('data', data);
+          } else if (data.type === 'shot') {
+            const pending = this.shots.get(data.id);
+            if (pending) {
+              this.shots.delete(data.id);
+              pending(data);
+            }
           } else if (data.type === 'error') {
             this.emit('log', `sensor: ${data.message}`);
           }
@@ -136,6 +143,23 @@ class Sensors extends EventEmitter {
 
   send(command) {
     if (this.socket && !this.socket.destroyed) this.socket.write(`${command}\n`);
+  }
+
+  shot(rect, file, timeout = 1500) {
+    if (!this.socket || this.socket.destroyed) return Promise.reject(new Error('ajudante parado'));
+    const id = crypto.randomBytes(4).toString('hex');
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.shots.delete(id);
+        reject(new Error('ajudante demorou'));
+      }, timeout);
+      this.shots.set(id, (data) => {
+        clearTimeout(timer);
+        if (data.ok) resolve(data);
+        else reject(new Error(data.error || 'falhou'));
+      });
+      this.send(`shot ${id} ${Math.round(rect.x)} ${Math.round(rect.y)} ${Math.round(rect.width)} ${Math.round(rect.height)} ${file}`);
+    });
   }
 
   setFps(on) {

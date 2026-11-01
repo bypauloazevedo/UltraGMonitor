@@ -15,6 +15,13 @@ namespace HudSensor
     {
         private static volatile bool _running = true;
         private static volatile int _interval = 1000;
+        private static readonly object WriteLock = new object();
+        private static StreamWriter _writer;
+
+        private static void Send(string line)
+        {
+            lock (WriteLock) _writer.WriteLine(line);
+        }
 
         private static int Main(string[] args)
         {
@@ -50,7 +57,7 @@ namespace HudSensor
             }
 
             var encoding = new UTF8Encoding(false);
-            var writer = new StreamWriter(stream, encoding) { AutoFlush = true, NewLine = "\n" };
+            _writer = new StreamWriter(stream, encoding) { AutoFlush = true, NewLine = "\n" };
             var isAdmin = IsAdmin();
             var pawnIo = PawnIoInstalled();
 
@@ -76,7 +83,7 @@ namespace HudSensor
                         var fullscreen = Native.ForegroundFullscreen(out var cx, out var cy);
                         json.BeginObject("fullscreen").Prop("active", fullscreen).Prop("x", cx, 0).Prop("y", cy, 0).EndObject();
                         json.EndObject();
-                        writer.WriteLine(json.ToString());
+                        Send(json.ToString());
                     }
                     catch (IOException)
                     {
@@ -86,7 +93,7 @@ namespace HudSensor
                     {
                         try
                         {
-                            writer.WriteLine(new JsonWriter().BeginObject().Prop("type", "error").Prop("message", ex.Message).EndObject().ToString());
+                            Send(new JsonWriter().BeginObject().Prop("type", "error").Prop("message", ex.Message).EndObject().ToString());
                         }
                         catch
                         {
@@ -119,6 +126,9 @@ namespace HudSensor
                             case "interval":
                                 if (parts.Length > 1 && int.TryParse(parts[1], out var ms)) _interval = Math.Max(250, Math.Min(5000, ms));
                                 break;
+                            case "shot":
+                                TakeShot(line.Trim().Split(new[] { ' ' }, 7));
+                                break;
                             case "quit":
                                 _running = false;
                                 return;
@@ -130,6 +140,31 @@ namespace HudSensor
                 }
                 _running = false;
             });
+        }
+
+        private static void TakeShot(string[] parts)
+        {
+            var json = new JsonWriter().BeginObject().Prop("type", "shot").Prop("id", parts.Length > 1 ? parts[1] : "");
+            try
+            {
+                var x = int.Parse(parts[2], CultureInfo.InvariantCulture);
+                var y = int.Parse(parts[3], CultureInfo.InvariantCulture);
+                var width = int.Parse(parts[4], CultureInfo.InvariantCulture);
+                var height = int.Parse(parts[5], CultureInfo.InvariantCulture);
+                ScreenShot.Save(x, y, width, height, parts[6]);
+                json.Prop("ok", true).Prop("width", width, 0).Prop("height", height, 0);
+            }
+            catch (Exception ex)
+            {
+                json.Prop("ok", false).Prop("error", ex.Message);
+            }
+            try
+            {
+                Send(json.EndObject().ToString());
+            }
+            catch
+            {
+            }
         }
 
         private static bool IsAdmin()

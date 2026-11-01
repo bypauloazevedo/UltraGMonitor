@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, screen, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, nativeTheme, screen, shell } = require('electron');
 const path = require('path');
 const { execFile, execFileSync } = require('child_process');
 const settings = require('./settings');
@@ -7,12 +7,16 @@ const background = require('./background');
 const { Overlay } = require('./overlay');
 const { Sensors } = require('./sensors');
 const { Weather, searchCity } = require('./weather');
+const { Capture } = require('./capture');
+const { Toast } = require('./toast');
+const { Recorder } = require('./recorder');
+const i18n = require('../renderer/shared/i18n');
+const { t } = i18n;
 
 const PAWNIO_URL = 'https://pawnio.eu/';
-const HOTKEYS = {
-  lock: 'CommandOrControl+Shift+H',
-  fps: 'CommandOrControl+Shift+F',
-  visible: 'CommandOrControl+Shift+O',
+const TITLE_BAR = {
+  dark: { color: '#0d0f14', symbolColor: '#c9d1dc' },
+  light: { color: '#eef1f5', symbolColor: '#3a4250' },
 };
 
 app.disableHardwareAcceleration();
@@ -28,6 +32,19 @@ let weather = null;
 let tray = null;
 let settingsWin = null;
 let lastSensors = null;
+let capture = null;
+let toast = null;
+let recorder = null;
+
+function toggleRecording() {
+  if (recorder.active) recorder.stop();
+  else capture.start('video');
+}
+let hotkeyStatus = {};
+
+function hotkeys() {
+  return settings.get().hotkeys || {};
+}
 
 function broadcast(channel, payload) {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -39,7 +56,7 @@ function displayList() {
   const primary = screen.getPrimaryDisplay().id;
   return screen.getAllDisplays().map((d, i) => ({
     id: d.id,
-    label: `Monitor ${i + 1} · ${d.size.width}×${d.size.height}${d.id === primary ? ' · principal' : ''}`,
+    label: `${t('Monitor')} ${i + 1} · ${d.size.width}×${d.size.height}${d.id === primary ? ` · ${t('principal')}` : ''}`,
   }));
 }
 
@@ -48,7 +65,8 @@ function state() {
     sensor: sensors ? sensors.status : null,
     electronAdmin: sensors ? sensors.electronAdmin : false,
     displays: displayList(),
-    hotkeys: HOTKEYS,
+    hotkeys: hotkeys(),
+    hotkeyStatus,
     version: app.getVersion(),
   };
 }
@@ -87,6 +105,22 @@ function taskbarIsLight() {
   }
 }
 
+function titleBarColors() {
+  return nativeTheme.shouldUseDarkColors ? TITLE_BAR.dark : TITLE_BAR.light;
+}
+
+function applyTheme() {
+  const theme = settings.get().theme;
+  nativeTheme.themeSource = theme === 'light' || theme === 'dark' ? theme : 'system';
+}
+
+function paintSettingsWindow() {
+  if (!settingsWin || settingsWin.isDestroyed()) return;
+  const colors = titleBarColors();
+  settingsWin.setTitleBarOverlay(colors);
+  settingsWin.setBackgroundColor(colors.color);
+}
+
 function applySettings(patch) {
   const before = settings.get();
   const next = settings.update(patch);
@@ -103,6 +137,13 @@ function applySettings(patch) {
     else sensors.setFps(next.fpsEnabled);
   }
   if (patch.city !== undefined) weather.refresh();
+  if (patch.hotkeys !== undefined) registerHotkeys();
+  if (patch.theme !== undefined) applyTheme();
+  if (patch.language !== undefined) {
+    i18n.setLang(next.language);
+    if (settingsWin && !settingsWin.isDestroyed()) settingsWin.setTitle(t('UltraGMonitor · Configurações'));
+    broadcast('state', state());
+  }
   if (patch.startWithWindows !== undefined && patch.startWithWindows !== before.startWithWindows) setStartWithWindows(!!next.startWithWindows);
   broadcast('settings', next);
   refreshTray();
@@ -123,11 +164,11 @@ function openSettings() {
     y: saved ? saved.y : undefined,
     minWidth: 420,
     minHeight: 520,
-    title: 'UltraGMonitor · Configurações',
-    backgroundColor: '#0d0f14',
+    title: t('UltraGMonitor · Configurações'),
+    backgroundColor: titleBarColors().color,
     autoHideMenuBar: true,
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#0d0f14', symbolColor: '#c9d1dc', height: 40 },
+    titleBarOverlay: { ...titleBarColors(), height: 40 },
     icon: paths.asset('icon.png'),
     show: false,
     webPreferences: {
@@ -200,21 +241,28 @@ function refreshTray() {
     click: () => applySettings({ opacity: value }),
   });
   const menu = Menu.buildFromTemplate([
-    { label: s.hidden ? 'Mostrar UltraGMonitor' : 'Esconder UltraGMonitor', accelerator: HOTKEYS.visible, click: toggleVisible },
-    { label: s.locked ? 'Destravar pra mover' : 'Travar posição', accelerator: HOTKEYS.lock, click: toggleLock },
-    { label: 'Medir FPS', type: 'checkbox', checked: s.fpsEnabled, accelerator: HOTKEYS.fps, click: toggleFps },
-    { type: 'separator' },
-    { label: 'Visual', submenu: [layoutItem('card', 'Card'), layoutItem('compact', 'Compacto'), layoutItem('bar', 'Barra'), layoutItem('dock', 'Dock (barra de tarefas)')] },
-    { label: 'Fundo', submenu: [1, 0.82, 0.6, 0.35, 0].map(opacityItem) },
+    { label: t('Capturar tela'), accelerator: hotkeys().capture || undefined, click: () => capture.start() },
     {
-      label: 'Mover pro monitor',
+      label: recorder && recorder.active ? t('Parar gravação') : t('Gravar vídeo'),
+      accelerator: hotkeys().record || undefined,
+      click: toggleRecording,
+    },
+    { type: 'separator' },
+    { label: s.hidden ? t('Mostrar UltraGMonitor') : t('Esconder UltraGMonitor'), accelerator: hotkeys().visible || undefined, click: toggleVisible },
+    { label: s.locked ? t('Destravar pra mover') : t('Travar posição'), accelerator: hotkeys().lock || undefined, click: toggleLock },
+    { label: t('Medir FPS'), type: 'checkbox', checked: s.fpsEnabled, accelerator: hotkeys().fps || undefined, click: toggleFps },
+    { type: 'separator' },
+    { label: t('Visual'), submenu: [layoutItem('card', t('Card')), layoutItem('compact', t('Compacto')), layoutItem('bar', t('Barra')), layoutItem('dock', t('Dock (barra de tarefas)'))] },
+    { label: t('Fundo'), submenu: [1, 0.82, 0.6, 0.35, 0].map(opacityItem) },
+    {
+      label: t('Mover pro monitor'),
       submenu: displayList().map((d) => ({ label: d.label, click: () => overlay.moveToDisplay(d.id) })),
     },
     { type: 'separator' },
-    { label: 'Configurações…', click: openSettings },
-    { label: 'Reiniciar sensores como admin', click: () => startSensors(true) },
+    { label: t('Configurações…'), click: openSettings },
+    { label: t('Reiniciar sensores como admin'), click: () => startSensors(true) },
     { type: 'separator' },
-    { label: 'Sair', click: () => app.quit() },
+    { label: t('Sair'), click: () => app.quit() },
   ]);
   tray.setContextMenu(menu);
   tray.setToolTip('UltraGMonitor');
@@ -228,9 +276,24 @@ function createTray() {
 }
 
 function registerHotkeys() {
-  globalShortcut.register(HOTKEYS.lock, toggleLock);
-  globalShortcut.register(HOTKEYS.fps, toggleFps);
-  globalShortcut.register(HOTKEYS.visible, toggleVisible);
+  globalShortcut.unregisterAll();
+  const actions = {
+    capture: () => capture.start(),
+    record: toggleRecording,
+    lock: toggleLock,
+    fps: toggleFps,
+    visible: toggleVisible,
+  };
+  hotkeyStatus = {};
+  for (const [name, accelerator] of Object.entries(hotkeys())) {
+    if (!accelerator || !actions[name]) continue;
+    try {
+      hotkeyStatus[name] = globalShortcut.register(accelerator, actions[name]) ? 'ok' : 'busy';
+    } catch {
+      hotkeyStatus[name] = 'invalid';
+    }
+  }
+  broadcast('state', state());
 }
 
 function registerIpc() {
@@ -256,6 +319,30 @@ function registerIpc() {
     return applySettings({ background: { file: null, kind: null, name: null } });
   });
   ipcMain.on('overlay:handle', (_e, rect) => overlay.setHandleRect(rect));
+  ipcMain.handle('hotkeys:pause', () => globalShortcut.unregisterAll());
+  ipcMain.handle('hotkeys:resume', () => registerHotkeys());
+  ipcMain.handle('capture:image', () => capture.image());
+  ipcMain.on('capture:ready', () => capture.ready());
+  ipcMain.handle('capture:copy', (_e, png) => capture.copy(png));
+  ipcMain.handle('capture:save', (_e, png) => capture.save(png));
+  ipcMain.handle('capture:pin', (_e, png, rect) => capture.pin(png, rect));
+  ipcMain.on('capture:close', () => capture.close());
+  ipcMain.handle('record:start', (_e, cfg) => {
+    settings.update({ recordSystemAudio: !!cfg.system, recordMic: !!cfg.mic });
+    const display = capture.region();
+    if (display) recorder.start({ display, ...cfg });
+  });
+  ipcMain.on('record:command', (_e, action) => {
+    if (action === 'cancel') recorder.cancel();
+    else recorder.command(action);
+  });
+  ipcMain.on('recorder:started', () => recorder.started());
+  ipcMain.on('recorder:done', (_e, data, mime) => recorder.done(data, mime));
+  ipcMain.on('recorder:error', (_e, message) => recorder.fail(message));
+  ipcMain.on('window:close', (e) => {
+    const win = BrowserWindow.fromWebContents(e.sender);
+    if (win && win !== overlay.win && win !== settingsWin) win.close();
+  });
   ipcMain.on('overlay:resize', (_e, size) => {
     if (size && Number.isFinite(size.width) && Number.isFinite(size.height)) overlay.resize(size.width, size.height);
   });
@@ -267,6 +354,10 @@ app.whenReady().then(() => {
   if (!hasLock) return;
   settings.load();
   if (app.isPackaged && settings.isFirstRun()) settings.update({ startWithWindows: true });
+  if (!i18n.LANGS.includes(settings.get().language)) settings.update({ language: i18n.pick(app.getLocale()) });
+  i18n.setLang(settings.get().language);
+  applyTheme();
+  nativeTheme.on('updated', paintSettingsWindow);
   const s = settings.get();
 
   sensors = new Sensors({ exe: paths.sensorExe(), presentMon: paths.presentMonExe() });
@@ -286,6 +377,24 @@ app.whenReady().then(() => {
   overlay = new Overlay(settings, { onLayout: applySettings });
   overlay.dockExtra = { light: taskbarIsLight() };
   overlay.create();
+  toast = new Toast();
+  recorder = new Recorder({
+    toast,
+    onChange: (state) => {
+      if (overlay.win && !overlay.win.isDestroyed()) overlay.win.setContentProtection(state.active);
+      refreshTray();
+    },
+  });
+  capture = new Capture({
+    sensors,
+    toast,
+    getSettings: () => settings.get(),
+    beforeShot: () => {
+      if (overlay.win && !overlay.win.isDestroyed()) overlay.win.hide();
+    },
+    afterShot: () => overlay.refreshVisibility(),
+  });
+  setTimeout(() => capture.warm(), 1500);
   createTray();
   registerHotkeys();
 

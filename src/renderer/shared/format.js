@@ -15,9 +15,18 @@ window.HudFmt = (() => {
     return `${Math.round(bytes / 1024)} KB/s`;
   };
 
-  const weekday = new Intl.DateTimeFormat('pt-BR', { weekday: 'long' });
-  const dayMonth = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long' });
-  const shortDate = new Intl.DateTimeFormat('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  const formatters = {};
+  const dates = () => {
+    const locale = window.HudI18n ? window.HudI18n.locale() : 'pt-BR';
+    if (!formatters[locale]) {
+      formatters[locale] = {
+        weekday: new Intl.DateTimeFormat(locale, { weekday: 'long' }),
+        dayMonth: new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }),
+        shortDate: new Intl.DateTimeFormat(locale, { weekday: 'short', day: '2-digit', month: '2-digit' }),
+      };
+    }
+    return formatters[locale];
+  };
 
   const time = (now, h24) => {
     let h = now.getHours();
@@ -26,6 +35,7 @@ window.HudFmt = (() => {
       suffix = h >= 12 ? 'PM' : 'AM';
       h = h % 12 || 12;
     }
+    const { weekday, dayMonth, shortDate } = dates();
     return {
       hm: `${h24 ? String(h).padStart(2, '0') : h}:${String(now.getMinutes()).padStart(2, '0')}`,
       sec: String(now.getSeconds()).padStart(2, '0'),

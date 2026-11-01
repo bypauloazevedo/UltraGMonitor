@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:" />
+    <title>UltraGMonitor · Captura</title>
+    <link rel="stylesheet" href="../shared/fonts.css" />
+    <link rel="stylesheet" href="../shared/base.css" />
+    <link rel="stylesheet" href="capture.css" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="sel" hidden>
+      <i data-h="nw"></i><i data-h="n"></i><i data-h="ne"></i><i data-h="e"></i>
+      <i data-h="se"></i><i data-h="s"></i><i data-h="sw"></i><i data-h="w"></i>
+    </div>
+    <div id="size" hidden></div>
+    <div id="hint">Arraste pra selecionar · Esc cancela</div>
+    <div id="bar" hidden></div>
+    <div id="tip" hidden></div>
+    <textarea id="text" hidden spellcheck="false"></textarea>
+    <script src="../shared/i18n.js"></script>
+    <script src="../shared/theme.js"></script>
+    <script src="capture.js"></script>
+  </body>
+</html>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using LibreHardwareMonitor.Hardware;
@@ -10,6 +11,9 @@ namespace HudSensor
     {
         private readonly Computer _computer;
         private readonly DiskCounters _counters = new DiskCounters();
+        private PerformanceCounter _cpuPerformance;
+        private PerformanceCounter _cpuFrequency;
+        private bool _cpuCountersBroken;
         private int _tick;
 
         public HardwareReader()
@@ -59,10 +63,32 @@ namespace HudSensor
                 .Prop("name", cpu.Name)
                 .Prop("load", Find(cpu, SensorType.Load, "CPU Total"))
                 .Prop("temp", Find(cpu, SensorType.Temperature, "CPU Package", "Core (Tctl/Tdie)", "Core (Tctl)", "Core Max", "Core Average") ?? Max(cpu, SensorType.Temperature, "Core"))
-                .Prop("clock", cores.Count > 0 ? cores.Average() : (double?)null, 0)
+                .Prop("clock", CpuClock() ?? (cores.Count > 0 ? cores.Average() : (double?)null), 0)
                 .Prop("power", Positive(Find(cpu, SensorType.Power, "CPU Package")))
                 .Prop("maxCore", Find(cpu, SensorType.Load, "CPU Core Max") ?? MaxCoreLoad(cpu), 0)
                 .EndObject();
+        }
+
+        private double? CpuClock()
+        {
+            if (_cpuCountersBroken) return null;
+            try
+            {
+                if (_cpuPerformance == null)
+                {
+                    _cpuPerformance = new PerformanceCounter("Processor Information", "% Processor Performance", "_Total", true);
+                    _cpuFrequency = new PerformanceCounter("Processor Information", "Processor Frequency", "_Total", true);
+                    _cpuPerformance.NextValue();
+                    return null;
+                }
+                var clock = _cpuPerformance.NextValue() / 100.0 * _cpuFrequency.NextValue();
+                return clock > 0 ? clock : (double?)null;
+            }
+            catch
+            {
+                _cpuCountersBroken = true;
+                return null;
+            }
         }
 
         private static double? MaxCoreLoad(IHardware cpu)
@@ -207,6 +233,8 @@ namespace HudSensor
         public void Dispose()
         {
             _counters.Dispose();
+            _cpuPerformance?.Dispose();
+            _cpuFrequency?.Dispose();
             try
             {
                 _computer.Close();

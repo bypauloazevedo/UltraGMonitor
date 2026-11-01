@@ -1,5 +1,7 @@
 const fonts = window.HudFonts;
 const theme = window.HudTheme;
+const i18n = window.HudI18n;
+const { t } = i18n;
 const MODULES = [
   ['clock', 'Relógio'],
   ['date', 'Dia'],
@@ -37,7 +39,11 @@ function markSegmented(id, value) {
 }
 
 function renderVisual() {
+  markSegmented('language', i18n.lang());
+  markSegmented('theme', settings.theme || 'system');
   markSegmented('layout', settings.layout);
+  markSegmented('cardLayout', settings.cardLayout || 'grid');
+  $('card-layout-field').hidden = settings.layout !== 'card';
   setRange('scale', settings.scale, `${Math.round(settings.scale * 100)}%`);
   setRange('opacity', settings.opacity, `${Math.round(settings.opacity * 100)}%`);
 }
@@ -48,14 +54,16 @@ function renderAccents() {
     for (const { color, name } of theme.accents) {
       const btn = document.createElement('button');
       btn.style.setProperty('--c', color);
-      btn.title = name;
       btn.addEventListener('click', () => save({ accent: color }));
       wrap.appendChild(btn);
     }
   }
   const current = theme.accents.find((a) => a.color === settings.accent);
-  [...wrap.children].forEach((btn, i) => btn.classList.toggle('on', theme.accents[i].color === settings.accent));
-  $('accent-out').textContent = current ? current.name : '';
+  [...wrap.children].forEach((btn, i) => {
+    btn.classList.toggle('on', theme.accents[i].color === settings.accent);
+    btn.title = t(theme.accents[i].name);
+  });
+  $('accent-out').textContent = current ? t(current.name) : '';
   theme.apply(settings.accent);
 }
 
@@ -115,7 +123,7 @@ function renderTypography() {
 function renderBackground() {
   const bg = settings.background || {};
   const el = $('bg-current');
-  el.textContent = bg.file ? bg.name || bg.file : 'Nenhum fundo animado';
+  el.textContent = bg.file ? bg.name || bg.file : t('Nenhum fundo animado');
   el.classList.toggle('empty', !bg.file);
   $('bg-clear').hidden = !bg.file;
   $('bg-opacity-field').hidden = !bg.file;
@@ -126,9 +134,8 @@ function renderBackground() {
 function renderModules() {
   const wrap = $('modules');
   if (!wrap.children.length) {
-    for (const [key, label] of MODULES) {
+    for (const [key] of MODULES) {
       const btn = document.createElement('button');
-      btn.textContent = label;
       btn.dataset.key = key;
       btn.addEventListener('click', () => {
         const on = !settings.modules[key];
@@ -139,13 +146,17 @@ function renderModules() {
       wrap.appendChild(btn);
     }
   }
-  for (const btn of wrap.children) btn.classList.toggle('on', !!settings.modules[btn.dataset.key]);
+  for (const btn of wrap.children) {
+    btn.classList.toggle('on', !!settings.modules[btn.dataset.key]);
+    btn.textContent = t(MODULES.find(([key]) => key === btn.dataset.key)[1]);
+  }
 }
 
 function renderSwitches() {
-  for (const id of ['clock24h', 'showSeconds', 'fpsEnabled', 'adminSensors', 'startWithWindows', 'hoverFade']) {
+  for (const id of ['clock24h', 'showSeconds', 'fpsEnabled', 'adminSensors', 'startWithWindows', 'hoverFade', 'recordSystemAudio', 'recordMic']) {
     $(id).checked = !!settings[id];
   }
+  $('captureCloseOnCopy').checked = settings.captureCloseOnCopy !== false;
   renderHardwareNames();
 }
 
@@ -158,7 +169,7 @@ const HW_MODES = [
 function renderHardwareNames() {
   const cpu = sensors && sensors.cpu && sensors.cpu.name;
   const gpu = sensors && sensors.gpu && sensors.gpu.name;
-  const signature = `${cpu}|${gpu}`;
+  const signature = `${cpu}|${gpu}|${i18n.lang()}`;
   const defaults = { hwNames: 'name', hwNamesStrip: 'model' };
   for (const id of ['hwNames', 'hwNamesStrip']) {
     const wrap = $(id);
@@ -175,7 +186,7 @@ function renderHardwareNames() {
           btn.appendChild(line);
         }
         const small = document.createElement('small');
-        small.textContent = caption;
+        small.textContent = t(caption);
         btn.appendChild(small);
         wrap.appendChild(btn);
       }
@@ -191,7 +202,7 @@ function renderCity() {
   el.classList.toggle('empty', !c);
   el.innerHTML = '';
   if (!c) {
-    el.textContent = 'Nenhuma cidade escolhida';
+    el.textContent = t('Nenhuma cidade escolhida');
     return;
   }
   el.textContent = c.name;
@@ -207,13 +218,13 @@ function defaultDisk(disks) {
 function renderDisks() {
   const select = $('disk');
   const disks = (sensors && sensors.disks) || [];
-  const signature = disks.map((d) => `${d.id}:${d.name}`).join('|') + settings.diskId;
+  const signature = disks.map((d) => `${d.id}:${d.name}`).join('|') + settings.diskId + i18n.lang();
   if (select.dataset.sig === signature) return;
   select.dataset.sig = signature;
   select.innerHTML = '';
   if (!disks.length) {
     const opt = document.createElement('option');
-    opt.textContent = 'Nenhum disco lido';
+    opt.textContent = t('Nenhum disco lido');
     select.appendChild(opt);
     select.disabled = true;
     return;
@@ -248,10 +259,10 @@ function statusItem(level, title, detail) {
   const li = document.createElement('li');
   if (level) li.className = level;
   const body = document.createElement('div');
-  body.textContent = title;
+  body.textContent = t(title);
   if (detail) {
     const small = document.createElement('small');
-    small.textContent = detail;
+    small.textContent = t(detail);
     body.appendChild(small);
   }
   li.appendChild(body);
@@ -288,7 +299,159 @@ function renderStatus() {
 }
 
 function renderLock() {
-  $('lock').textContent = settings.locked ? 'Destravar pra mover' : 'Travar posição';
+  $('lock').textContent = settings.locked ? t('Destravar pra mover') : t('Travar posição');
+}
+
+const HOTKEY_ROWS = [
+  ['capture', 'Capturar tela'],
+  ['record', 'Gravar vídeo (aperta de novo pra parar)'],
+  ['lock', 'Destravar / travar pra mover e redimensionar'],
+  ['fps', 'Liga / desliga FPS'],
+  ['visible', 'Mostrar / esconder o monitor'],
+];
+const SOLO_KEYS = /^(F([1-9]|1[0-9]|2[0-4])|PrintScreen|Home|End|Insert|Delete|PageUp|PageDown|Scrolllock|num.+)$/;
+const KEY_MAP = {
+  PrintScreen: 'PrintScreen',
+  Home: 'Home',
+  End: 'End',
+  Insert: 'Insert',
+  Delete: 'Delete',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Space: 'Space',
+  Tab: 'Tab',
+  Enter: 'Enter',
+  Backquote: '`',
+  Minus: '-',
+  Equal: '=',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  ScrollLock: 'Scrolllock',
+  NumpadAdd: 'numadd',
+  NumpadSubtract: 'numsub',
+  NumpadMultiply: 'nummult',
+  NumpadDivide: 'numdiv',
+  NumpadDecimal: 'numdec',
+};
+let recording = null;
+let hotkeyError = '';
+
+function keyName(e) {
+  if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3);
+  if (/^Digit[0-9]$/.test(e.code)) return e.code.slice(5);
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(e.code)) return e.code;
+  if (/^Numpad[0-9]$/.test(e.code)) return `num${e.code.slice(6)}`;
+  return KEY_MAP[e.code] || null;
+}
+
+function pretty(accelerator) {
+  return accelerator.replace('CommandOrControl', 'Ctrl').replace('PrintScreen', 'Print Screen').split('+');
+}
+
+function renderHotkeys() {
+  const wrap = $('hotkeys');
+  const keys = settings.hotkeys || {};
+  const status = (appState && appState.hotkeyStatus) || {};
+  wrap.innerHTML = '';
+  for (const [id, label] of HOTKEY_ROWS) {
+    const row = document.createElement('div');
+    row.className = 'hotkey';
+    const name = document.createElement('span');
+    name.textContent = t(label);
+    if (status[id] === 'busy' || status[id] === 'invalid') {
+      row.classList.add('bad');
+      const small = document.createElement('small');
+      small.textContent = status[id] === 'busy' ? t('Outro programa já usa esse atalho') : t('Atalho inválido');
+      name.appendChild(small);
+    }
+    const btn = document.createElement('button');
+    btn.className = 'hk-btn';
+    btn.dataset.id = id;
+    if (recording === id) {
+      btn.classList.add('rec');
+      btn.textContent = t('Aperte a tecla…');
+    } else if (keys[id]) {
+      for (const part of pretty(keys[id])) {
+        const kbd = document.createElement('kbd');
+        kbd.textContent = part;
+        btn.appendChild(kbd);
+      }
+    } else {
+      btn.textContent = t('Sem atalho');
+      btn.classList.add('empty');
+    }
+    row.append(name, btn);
+    wrap.appendChild(row);
+  }
+  const help = $('hotkey-help');
+  help.classList.toggle('error', !!hotkeyError);
+  if (hotkeyError) help.textContent = hotkeyError;
+  else help.textContent = t(help.dataset.text);
+}
+
+function startRecording(id) {
+  recording = id;
+  hotkeyError = '';
+  window.hud.pauseHotkeys();
+  renderHotkeys();
+}
+
+function stopRecording() {
+  if (!recording) return;
+  recording = null;
+  window.hud.resumeHotkeys();
+  renderHotkeys();
+}
+
+function onHotkeyKey(e) {
+  if (!recording) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) return;
+  const mods = [];
+  if (e.ctrlKey) mods.push('Ctrl');
+  if (e.altKey) mods.push('Alt');
+  if (e.shiftKey) mods.push('Shift');
+  if (e.metaKey) mods.push('Super');
+  if (!mods.length && e.key === 'Escape') {
+    hotkeyError = '';
+    stopRecording();
+    return;
+  }
+  if (!mods.length && e.key === 'Backspace') {
+    const id = recording;
+    stopRecording();
+    save({ hotkeys: { [id]: '' } });
+    return;
+  }
+  const key = keyName(e);
+  if (!key) return;
+  if (!mods.length && !SOLO_KEYS.test(key)) {
+    hotkeyError = t('Essa tecla sozinha ia parar de funcionar no Windows inteiro. Use com Ctrl, Alt ou Shift, ou uma tecla especial (Print Screen, F13–F24, Home…).');
+    renderHotkeys();
+    return;
+  }
+  const value = [...mods, key].join('+');
+  const taken = HOTKEY_ROWS.find(([other]) => other !== recording && (settings.hotkeys || {})[other] === value);
+  if (taken) {
+    hotkeyError = t('Esse atalho já tá em "{name}".', { name: t(taken[1]) });
+    renderHotkeys();
+    return;
+  }
+  const id = recording;
+  hotkeyError = '';
+  stopRecording();
+  save({ hotkeys: { [id]: value } });
 }
 
 function renderAll() {
@@ -303,13 +466,48 @@ function renderAll() {
   renderDisplays();
   renderStatus();
   renderLock();
+  renderHotkeys();
   scheduleLayout();
 }
 
 const COLUMN_MIN = 400;
+const TABS = ['sistema', 'captura', 'conteudo', 'atalhos', 'aparencia'];
 const sections = [...document.querySelectorAll('main > section')];
+let activeTab = readTab();
 let layoutKey = '';
 let layoutFrame = 0;
+
+function readTab() {
+  try {
+    const saved = localStorage.getItem('ugm-tab');
+    return TABS.includes(saved) ? saved : TABS[0];
+  } catch {
+    return TABS[0];
+  }
+}
+
+function setTab(tab) {
+  if (!TABS.includes(tab) || tab === activeTab) return;
+  activeTab = tab;
+  try {
+    localStorage.setItem('ugm-tab', tab);
+  } catch {}
+  renderTabs();
+  window.scrollTo(0, 0);
+  layoutColumns();
+}
+
+function renderTabs() {
+  for (const btn of document.querySelectorAll('#tabs button')) btn.classList.toggle('on', btn.dataset.tab === activeTab);
+}
+
+function makeColumns(count) {
+  return Array.from({ length: count }, () => {
+    const col = document.createElement('div');
+    col.className = 'col';
+    return col;
+  });
+}
 
 function partition(heights, count, gap) {
   const n = heights.length;
@@ -332,30 +530,37 @@ function partition(heights, count, gap) {
 function layoutColumns() {
   layoutFrame = 0;
   const main = document.querySelector('main');
+  const stash = $('stash');
   const style = getComputedStyle(main);
   const gap = parseFloat(style.columnGap) || 12;
   const inner = main.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-  const count = Math.max(1, Math.min(3, Math.floor((inner + gap) / (COLUMN_MIN + gap))));
-  const grown = sections.filter((s) => s.classList.contains('grow'));
+  const visible = sections.filter((s) => s.dataset.tab === activeTab);
+  const count = Math.max(1, Math.min(3, visible.length, Math.floor((inner + gap) / (COLUMN_MIN + gap))));
+  for (const s of sections) {
+    if (s.dataset.tab !== activeTab && s.parentElement !== stash) stash.appendChild(s);
+  }
+  if (visible.some((s) => !main.contains(s)) || main.children.length !== count) {
+    layoutKey = '';
+    main.style.setProperty('--cols', String(count));
+    const columns = makeColumns(count);
+    visible.forEach((s, i) => columns[i % count].appendChild(s));
+    main.replaceChildren(...columns);
+  }
+  const grown = visible.filter((s) => s.classList.contains('grow'));
   grown.forEach((s) => s.classList.remove('grow'));
-  const heights = sections.map((s) => s.offsetHeight);
-  const key = `${count}:${heights.join(',')}`;
-  if (key === layoutKey && main.children.length === count) {
+  const heights = visible.map((s) => s.offsetHeight);
+  const key = `${activeTab}:${count}:${heights.join(',')}`;
+  if (key === layoutKey) {
     grown.forEach((s) => s.classList.add('grow'));
     return;
   }
   layoutKey = key;
   main.style.setProperty('--cols', String(count));
-  const columns = [];
-  for (let i = 0; i < count; i++) {
-    const col = document.createElement('div');
-    col.className = 'col';
-    columns.push(col);
-  }
+  const columns = makeColumns(count);
   const ranges = partition(heights, count, gap);
   ranges.forEach(([a, b], i) => {
-    for (let j = a; j < b; j++) columns[i].appendChild(sections[j]);
-    if (count > 1) sections[b - 1].classList.add('grow');
+    for (let j = a; j < b; j++) columns[i].appendChild(visible[j]);
+    if (count > 1) visible[b - 1].classList.add('grow');
   });
   main.replaceChildren(...columns);
   requestAnimationFrame(fitPreviews);
@@ -366,14 +571,37 @@ function scheduleLayout() {
 }
 
 function bind() {
+  renderTabs();
+  $('tabs').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (btn) setTab(btn.dataset.tab);
+  });
   window.addEventListener('resize', () => {
     scheduleLayout();
     fitPreviews();
   });
+  $('hotkey-help').dataset.text = $('hotkey-help').textContent.replace(/\s+/g, ' ').trim();
+  $('hotkeys').addEventListener('click', (e) => {
+    const btn = e.target.closest('.hk-btn');
+    if (!btn) return;
+    if (recording === btn.dataset.id) stopRecording();
+    else startRecording(btn.dataset.id);
+  });
+  window.addEventListener('keydown', onHotkeyKey, true);
+  window.addEventListener('keyup', (e) => {
+    if (recording && e.code === 'PrintScreen') onHotkeyKey(e);
+  }, true);
+  window.addEventListener('blur', stopRecording);
   document.fonts.ready.then(() => {
     fitPreviews();
     scheduleLayout();
   });
+  for (const id of ['language', 'theme', 'cardLayout']) {
+    $(id).addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (btn) save({ [id]: btn.dataset.value });
+    });
+  }
   $('layout').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (btn) save({ layout: btn.dataset.value });
@@ -406,7 +634,7 @@ function bind() {
   }
   $('bg-choose').addEventListener('click', () => window.hud.chooseBackground());
   $('bg-clear').addEventListener('click', () => window.hud.clearBackground());
-  for (const id of ['clock24h', 'showSeconds', 'adminSensors', 'startWithWindows', 'hoverFade']) {
+  for (const id of ['clock24h', 'showSeconds', 'adminSensors', 'startWithWindows', 'hoverFade', 'captureCloseOnCopy', 'recordSystemAudio', 'recordMic']) {
     $(id).addEventListener('change', (e) => save({ [id]: e.target.checked }));
   }
   $('fpsEnabled').addEventListener('change', (e) => {
@@ -453,15 +681,22 @@ async function init() {
   appState = await window.hud.getState();
   sensors = await window.hud.lastSensors();
   bind();
+  i18n.setLang(settings.language);
+  i18n.apply();
   renderAll();
   window.hud.onSettings((next) => {
     settings = next;
+    if (settings.language !== i18n.lang()) {
+      i18n.setLang(settings.language);
+      i18n.apply();
+    }
     renderAll();
   });
   window.hud.onState((next) => {
     appState = next;
     renderStatus();
     renderDisplays();
+    renderHotkeys();
     scheduleLayout();
   });
   window.hud.onSensors((data) => {

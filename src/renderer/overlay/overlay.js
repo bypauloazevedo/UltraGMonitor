@@ -1,4 +1,5 @@
 const fmt = window.HudFmt;
+const { t } = window.HudI18n;
 const icons = window.HudIcons;
 const fonts = window.HudFonts;
 const ui = icons.ui;
@@ -79,9 +80,18 @@ function grip() {
   return `<div class="grip" style="${style.join(';')}">${ui.corner}</div>`;
 }
 
-function media() {
+function cardLayout() {
+  return ['list', 'tall'].includes(settings.cardLayout) ? settings.cardLayout : 'grid';
+}
+
+function hasMedia() {
   const bg = settings.background;
-  if (!bg || !bg.file) return '';
+  return !!(bg && bg.file) && (settings.layout === 'card' || settings.layout === 'compact');
+}
+
+function media() {
+  if (!hasMedia()) return '';
+  const bg = settings.background;
   const src = `ugm://background/${encodeURIComponent(bg.file)}`;
   return bg.kind === 'video'
     ? `<div class="media"><video src="${src}" autoplay muted loop playsinline></video></div>`
@@ -90,7 +100,7 @@ function media() {
 
 function surfaceClass(base) {
   const a = anchor();
-  return `${base} surface grip-${a.y} grip-${a.x}${settings.background && settings.background.file ? ' has-media' : ''}`;
+  return `${base} surface grip-${a.y} grip-${a.x}${hasMedia() ? ' has-media' : ''}`;
 }
 
 function tile(key) {
@@ -124,7 +134,7 @@ function buildCard() {
             <div class="wx-rain" data-k="wx.rainbox"><span class="ico" data-k="wx.rainicon"></span><span data-k="wx.rain"></span></div>
             <div class="wx-meta num" data-k="wx.meta"></div>
           </div>`
-        : '<div class="wx"><div class="wx-empty">Escolha a cidade nas configurações pra ver o clima</div></div>';
+        : `<div class="wx"><div class="wx-empty">${t('Escolha a cidade nas configurações pra ver o clima')}</div></div>`;
     }
     parts.push(`<div class="top"><div>${left.join('')}</div>${right}</div>`);
   }
@@ -136,15 +146,16 @@ function buildCard() {
     if (showFps()) {
       inner.push(`
         <div class="fps">
+          <div class="fps-app" data-k="fps.app"></div>
           <div class="fps-main" data-k="fps.tone"><span class="ico">${ui.fps}</span><span class="fps-value num">${stable('888', 'fps.value', true)}</span><span class="fps-unit">FPS</span></div>
-          <div class="fps-meta"><div class="fps-app" data-k="fps.app"></div><div class="fps-detail num">${stable('1% 888 · 88.8 ms', 'fps.detail', true)}</div></div>
+          <div class="fps-detail num">${stable('1% 888 · 88.8 ms', 'fps.detail', true)}</div>
         </div>`);
     }
     if (keys.length) inner.push(`<div class="tiles">${keys.map(tile).join('')}</div>`);
     parts.push(`<div class="metrics">${inner.join('')}</div>`);
   }
-  if (!parts.length) parts.push('<div class="wx-empty">Nada selecionado</div>');
-  return `<div class="${surfaceClass('card')}">${media()}${parts.join('')}${grip()}</div>`;
+  if (!parts.length) parts.push(`<div class="wx-empty">${t('Nada selecionado')}</div>`);
+  return `<div class="${surfaceClass(`card card-${cardLayout()}`)}">${media()}${parts.join('')}${grip()}</div>`;
 }
 
 function row(key) {
@@ -200,12 +211,12 @@ function buildDock() {
   if (!items.length) items.push('<div class="dk"><div class="dk-sub">UltraGMonitor</div></div>');
   const tools = settings.locked
     ? handle('dk-handle')
-    : `<span class="dk-tools"><button class="tb-icon" data-action="settings" title="Configurações">${ui.gear}</button><button class="tb-icon tb-ok" data-action="done" title="Pronto">${ui.check}</button></span>`;
+    : `<span class="dk-tools"><button class="tb-icon" data-action="settings" title="${t('Configurações')}">${ui.gear}</button><button class="tb-icon tb-ok" data-action="done" title="${t('Pronto')}">${ui.check}</button></span>`;
   return `<div class="dock surface${dock.light ? ' light' : ''}">${items.join('<i class="dk-sep"></i>')}${tools}</div>`;
 }
 
 function handle(extra) {
-  return `<button class="handle${extra ? ` ${extra}` : ''}" data-action="edit" title="Ajustar posição e estilo">${ui.sliders}</button>`;
+  return `<button class="handle${extra ? ` ${extra}` : ''}" data-action="edit" title="${t('Ajustar posição e estilo')}">${ui.sliders}</button>`;
 }
 
 function toolbar() {
@@ -214,15 +225,15 @@ function toolbar() {
     ['compact', 'Compacto'],
     ['bar', 'Barra'],
   ];
-  const buttons = layouts.map(([value, label]) => `<button data-layout="${value}"${settings.layout === value ? ' class="on"' : ''}>${label}</button>`).join('');
+  const buttons = layouts.map(([value, label]) => `<button data-layout="${value}"${settings.layout === value ? ' class="on"' : ''}>${t(label)}</button>`).join('');
   return `
     <div class="toolbar">
       <div class="tb-row">
         <div class="tb-seg">${buttons}</div>
-        <button class="tb-icon" data-action="settings" title="Configurações">${ui.gear}</button>
-        <button class="tb-ok" data-action="done"><span class="ico">${ui.check}</span>Pronto</button>
+        <button class="tb-icon" data-action="settings" title="${t('Configurações')}">${ui.gear}</button>
+        <button class="tb-ok" data-action="done"><span class="ico">${ui.check}</span>${t('Pronto')}</button>
       </div>
-      <div class="tb-hint">Arraste pra mover · puxe o canto pra mudar o tamanho · solte na barra de tarefas pra virar Dock</div>
+      <div class="tb-hint">${t('Arraste pra mover · puxe o canto pra mudar o tamanho · solte na barra de tarefas pra virar Dock')}</div>
     </div>`;
 }
 
@@ -238,7 +249,7 @@ function reportHandle() {
 
 function build() {
   const bg = settings.background || {};
-  const key = JSON.stringify([settings.layout, settings.modules, settings.fpsEnabled, settings.showSeconds, settings.clock24h, !!settings.city, settings.locked, anchor(), bg.file, dock.light, hwMode()]);
+  const key = JSON.stringify([settings.language, settings.layout, cardLayout(), settings.modules, settings.fpsEnabled, settings.showSeconds, settings.clock24h, !!settings.city, settings.locked, anchor(), bg.file, dock.light, hwMode()]);
   if (key === structureKey) return;
   structureKey = key;
   lastIcon = '';
@@ -319,12 +330,12 @@ function updateWeather() {
     lastIcon = iconKey;
   }
   text('wx.temp', fmt.temp(weather.temp));
-  const chance = fmt.has(weather.rain) && !weather.raining ? ` · ${Math.round(weather.rain)}% hoje` : '';
-  text('wx.rain', weather.raining ? 'Chovendo' : `Sem chuva${chance}`);
-  text('wx.dockrain', weather.raining ? 'Chovendo' : 'Sem chuva');
+  const chance = fmt.has(weather.rain) && !weather.raining ? ` · ${t('{n}% hoje', { n: Math.round(weather.rain) })}` : '';
+  text('wx.rain', weather.raining ? t('Chovendo') : `${t('Sem chuva')}${chance}`);
+  text('wx.dockrain', weather.raining ? t('Chovendo') : t('Sem chuva'));
   html('wx.rainicon', weather.raining ? ui.umbrella : ui.droplet);
   tone('wx.rainbox', weather.raining ? 'rain' : '');
-  text('wx.minirain', weather.raining ? 'chovendo' : '');
+  text('wx.minirain', weather.raining ? t('chovendo') : '');
   const range = fmt.has(weather.max) ? ` · ${fmt.temp(weather.max)} / ${fmt.temp(weather.min)}` : '';
   text('wx.meta', `${weather.city}${range}`);
 }
@@ -369,14 +380,16 @@ function updateSensors() {
   const disk = pickDisk(s.disks) || {};
   updateLabels();
 
+  const coreText = cardLayout() === 'grid' ? 'máx {n}%' : 'núcleo máx {n}%';
   setMetric('cpu', {
     value: cpu.load,
     level: fmt.level(cpu.load, ...LOAD),
     temp: cpu.temp,
     tempLevel: fmt.level(cpu.temp, ...TEMP.cpu),
-    extra: fmt.has(cpu.clock) || fmt.has(cpu.power)
-      ? [[ui.pulse, fmt.has(cpu.clock) && `${(cpu.clock / 1000).toFixed(1)} GHz`], [ui.zap, fmt.has(cpu.power) && `${Math.round(cpu.power)} W`]]
-      : [[ui.pulse, fmt.has(cpu.maxCore) && `núcleo máx ${Math.round(cpu.maxCore)}%`]],
+    extra: [
+      [ui.pulse, fmt.has(cpu.clock) && `${(cpu.clock / 1000).toFixed(1)} GHz`],
+      fmt.has(cpu.power) ? [ui.zap, `${Math.round(cpu.power)} W`] : [ui.cpu, fmt.has(cpu.maxCore) && t(coreText, { n: Math.round(cpu.maxCore) })],
+    ],
   });
 
   const vram = fmt.has(gpu.vramUsed) && fmt.has(gpu.vramTotal) ? `${(gpu.vramUsed / 1024).toFixed(1)}/${Math.round(gpu.vramTotal / 1024)} GB` : '';
@@ -414,10 +427,10 @@ function updateFps(fps) {
   tone('fps.tone', level);
   let app = '';
   if (has) app = fps.app || '';
-  else if (fps.enabled) app = 'Aguardando jogo…';
-  else if (sensors && !sensors.admin) app = 'FPS precisa de admin';
-  else if (fps.error) app = 'FPS indisponível';
-  else app = 'Iniciando…';
+  else if (fps.enabled) app = t('Aguardando jogo…');
+  else if (sensors && !sensors.admin) app = t('FPS precisa de admin');
+  else if (fps.error) app = t('FPS indisponível');
+  else app = t('Iniciando…');
   text('fps.app', app);
   text('fps.detail', has ? `1% ${fmt.round(fps.low1)} · ${fmt.fixed(fps.frametime)} ms` : '');
   text('fps.mini', has ? String(Math.round(fps.value)) : '—');
@@ -426,6 +439,7 @@ function updateFps(fps) {
 }
 
 function applyTheme() {
+  window.HudI18n.setLang(settings.language);
   const style = document.documentElement.style;
   const t = settings.typography;
   const display = fonts.stack(t.clock.font);

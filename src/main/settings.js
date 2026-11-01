@@ -3,8 +3,12 @@ const path = require('path');
 const { app } = require('electron');
 
 const DEFAULTS = {
+  language: null,
+  theme: 'system',
   layout: 'card',
+  cardLayout: 'grid',
   scale: 1,
+  scales: {},
   opacity: 0.82,
   accent: '#5ee6ff',
   modules: {
@@ -27,6 +31,17 @@ const DEFAULTS = {
   hoverFade: false,
   hwNames: 'name',
   hwNamesStrip: 'model',
+  hotkeys: {
+    capture: 'PrintScreen',
+    record: '',
+    lock: 'CommandOrControl+Shift+H',
+    fps: 'CommandOrControl+Shift+F',
+    visible: 'CommandOrControl+Shift+O',
+  },
+  capture: { color: '#ff3b5c', size: 4 },
+  captureCloseOnCopy: true,
+  recordSystemAudio: true,
+  recordMic: false,
   fpsEnabled: false,
   clock24h: true,
   showSeconds: true,
@@ -80,8 +95,21 @@ function flush() {
   }
 }
 
+function withLayoutScale(partial) {
+  const next = { ...partial };
+  const layoutChanged = next.layout !== undefined && next.layout !== current.layout;
+  const scales = { ...current.scales, ...next.scales };
+  if (layoutChanged) {
+    scales[current.layout] = current.scale;
+    if (next.scale === undefined) next.scale = scales[next.layout] ?? DEFAULTS.scale;
+  }
+  if (next.scale !== undefined) scales[next.layout ?? current.layout] = next.scale;
+  if (layoutChanged || next.scale !== undefined) next.scales = scales;
+  return next;
+}
+
 function update(partial) {
-  current = merge(current, partial);
+  current = merge(current, withLayoutScale(partial));
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flush, 300);
   return current;
