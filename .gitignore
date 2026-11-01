@@ -1,0 +1,8 @@
+node_modules/
+dist/
+sensor/bin/
+sensor/obj/
+sensor/out/
+resources/presentmon/*.exe
+resources/pawnio/*.exe
+.build/

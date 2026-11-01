@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:" />
+    <title>UltraGMonitor · Configurações</title>
+    <link rel="stylesheet" href="../shared/fonts.css" />
+    <link rel="stylesheet" href="../shared/base.css" />
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <header class="titlebar">
+      <span class="brand"><i class="dot"></i>UltraGMonitor</span>
+      <span class="title-sub">Configurações</span>
+    </header>
+
+    <main>
+      <section>
+        <h2>Visual</h2>
+        <div class="field">
+          <span class="label">Estilo</span>
+          <div class="segmented four" id="layout">
+            <button data-value="card">Card</button>
+            <button data-value="compact">Compacto</button>
+            <button data-value="bar">Barra</button>
+            <button data-value="dock">Dock</button>
+          </div>
+          <small class="help">Dock fica na barra de tarefas do Windows. Também dá pra destravar o widget e arrastar ele até a barra: ele encaixa sozinho.</small>
+        </div>
+        <div class="field">
+          <span class="label">Tamanho geral <output id="scale-out" class="num"></output></span>
+          <input type="range" id="scale" min="0.6" max="3" step="0.05" />
+          <small class="help">Também dá pra puxar o canto do widget quando ele tá destravado</small>
+        </div>
+        <div class="field">
+          <span class="label">Fundo <output id="opacity-out" class="num"></output></span>
+          <input type="range" id="opacity" min="0" max="1" step="0.05" />
+        </div>
+        <div class="field">
+          <span class="label">Cor de destaque <output id="accent-out"></output></span>
+          <div class="swatches" id="accent"></div>
+        </div>
+        <label class="switch-row">
+          <span>
+            Ficar transparente com o mouse em cima
+            <small>Deixa o mouse parado em cima do widget por 2 segundos e ele fica quase invisível, pra você ver o que tá embaixo (um campo de texto, por exemplo). Tirou o mouse, ele volta.</small>
+          </span>
+          <input type="checkbox" id="hoverFade" class="switch" />
+        </label>
+      </section>
+
+      <section>
+        <h2>Fontes</h2>
+        <div class="field">
+          <span class="label">Relógio, dia e clima <output id="fonts-display-out"></output></span>
+          <div class="font-grid" id="fonts-display"></div>
+        </div>
+        <div class="field">
+          <span class="label">Monitor <output id="fonts-metrics-out"></output></span>
+          <div class="font-grid" id="fonts-metrics"></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Tamanhos</h2>
+        <div class="field">
+          <span class="label">Relógio <output id="size-clock-out" class="num"></output></span>
+          <input type="range" id="size-clock" data-part="clock" min="0.6" max="2.5" step="0.05" />
+        </div>
+        <div class="field">
+          <span class="label">Espessura do relógio <output id="weight-out" class="num"></output></span>
+          <input type="range" id="weight" min="100" max="900" step="10" />
+        </div>
+        <div class="field">
+          <span class="label">Dia <output id="size-date-out" class="num"></output></span>
+          <input type="range" id="size-date" data-part="date" min="0.6" max="2.5" step="0.05" />
+        </div>
+        <div class="field">
+          <span class="label">Clima <output id="size-weather-out" class="num"></output></span>
+          <input type="range" id="size-weather" data-part="weather" min="0.6" max="2.5" step="0.05" />
+        </div>
+        <div class="field">
+          <span class="label">Monitor <output id="size-metrics-out" class="num"></output></span>
+          <input type="range" id="size-metrics" data-part="metrics" min="0.6" max="2.5" step="0.05" />
+        </div>
+      </section>
+
+      <section>
+        <h2>Fundo animado</h2>
+        <div class="bg-current" id="bg-current"></div>
+        <div class="actions">
+          <button class="btn" id="bg-choose">Escolher GIF ou vídeo</button>
+          <button class="btn ghost" id="bg-clear">Remover</button>
+        </div>
+        <div class="field" id="bg-opacity-field">
+          <span class="label">Opacidade do fundo animado <output id="bg-opacity-out" class="num"></output></span>
+          <input type="range" id="bg-opacity" min="0.05" max="1" step="0.05" />
+        </div>
+        <small class="help">Aceita GIF, WebP, PNG, JPG, MP4 e WebM. Vídeo pesa menos que GIF. Não aparece no Dock.</small>
+      </section>
+
+      <section>
+        <h2>O que mostrar</h2>
+        <div class="toggles" id="modules"></div>
+        <div class="field row-field">
+          <span class="label">Disco mostrado</span>
+          <select id="disk"></select>
+        </div>
+        <label class="switch-row">
+          <span>Relógio 24h</span>
+          <input type="checkbox" id="clock24h" class="switch" />
+        </label>
+        <label class="switch-row">
+          <span>Mostrar segundos</span>
+          <input type="checkbox" id="showSeconds" class="switch" />
+        </label>
+        <div class="field">
+          <span class="label">Como mostrar CPU e GPU</span>
+          <div class="hw-group">
+            <span class="hw-where">Card e Compacto</span>
+            <div class="hw-options" id="hwNames" data-setting="hwNames"></div>
+          </div>
+          <div class="hw-group">
+            <span class="hw-where">Barra e Dock</span>
+            <div class="hw-options" id="hwNamesStrip" data-setting="hwNamesStrip"></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>FPS</h2>
+        <label class="switch-row">
+          <span>
+            Medir FPS do jogo em foco
+            <small>Funciona com o jogo em janela ou tela cheia sem borda. Atalho: Ctrl+Shift+F</small>
+          </span>
+          <input type="checkbox" id="fpsEnabled" class="switch" />
+        </label>
+      </section>
+
+      <section>
+        <h2>Clima</h2>
+        <div class="city-current" id="city-current"></div>
+        <div class="search">
+          <input type="search" id="city-search" placeholder="Buscar cidade…" autocomplete="off" spellcheck="false" />
+          <ul id="city-results"></ul>
+        </div>
+      </section>
+
+      <section>
+        <h2>Sensores</h2>
+        <ul class="status" id="status"></ul>
+        <div class="actions">
+          <button class="btn" id="restart-admin">Reiniciar sensores como admin</button>
+          <button class="btn ghost" id="pawnio">Baixar PawnIO</button>
+        </div>
+        <label class="switch-row">
+          <span>
+            Pedir admin ao abrir
+            <small>Sem admin não dá pra ler FPS, temperatura da CPU e do SSD</small>
+          </span>
+          <input type="checkbox" id="adminSensors" class="switch" />
+        </label>
+      </section>
+
+      <section>
+        <h2>Posição</h2>
+        <div class="actions">
+          <button class="btn" id="lock"></button>
+        </div>
+        <div class="field row-field">
+          <span class="label">Monitor</span>
+          <select id="display"></select>
+        </div>
+        <label class="switch-row">
+          <span>Iniciar com o Windows</span>
+          <input type="checkbox" id="startWithWindows" class="switch" />
+        </label>
+      </section>
+
+      <section>
+        <h2>Atalhos</h2>
+        <dl class="keys">
+          <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>H</kbd></dt>
+          <dd>Destravar / travar pra mover e redimensionar</dd>
+          <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>F</kbd></dt>
+          <dd>Liga / desliga FPS</dd>
+          <dt><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>O</kbd></dt>
+          <dd>Mostrar / esconder o monitor</dd>
+        </dl>
+      </section>
+    </main>
+
+    <script src="../shared/fonts.js"></script>
+    <script src="../shared/theme.js"></script>
+    <script src="../shared/hardware.js"></script>
+    <script src="settings.js"></script>
+  </body>
+</html>

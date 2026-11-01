@@ -1,0 +1,170 @@
+const net = require('net');
+const crypto = require('crypto');
+const fs = require('fs');
+const { spawn, execFile, execFileSync } = require('child_process');
+const { EventEmitter } = require('events');
+
+function processIsAdmin() {
+  try {
+    execFileSync('net', ['session'], { stdio: 'ignore', windowsHide: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function psQuote(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+class Sensors extends EventEmitter {
+  constructor({ exe, presentMon }) {
+    super();
+    this.exe = exe;
+    this.presentMon = presentMon;
+    this.server = null;
+    this.socket = null;
+    this.child = null;
+    this.fps = false;
+    this.stopping = false;
+    this.crashes = 0;
+    this.restartTimer = null;
+    this.electronAdmin = processIsAdmin();
+    this.status = { running: false, elevated: false, elevationDenied: false, missing: false };
+  }
+
+  setStatus(patch) {
+    this.status = { ...this.status, ...patch };
+    this.emit('status', this.status);
+  }
+
+  start({ elevated, fps }) {
+    this.stop();
+    this.stopping = false;
+    this.fps = fps;
+    if (!fs.existsSync(this.exe)) {
+      this.setStatus({ running: false, missing: true });
+      return;
+    }
+    const name = `ugm-${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
+    const server = net.createServer((socket) => this.onConnection(socket));
+    this.server = server;
+    server.on('error', (err) => this.emit('log', `pipe: ${err.message}`));
+    server.listen(`\\\\.\\pipe\\${name}`, () => {
+      const args = ['--pipe', name, '--presentmon', this.presentMon];
+      if (fps) args.push('--fps');
+      if (elevated && !this.electronAdmin) this.launchElevated(args);
+      else this.launchDirect(args);
+    });
+  }
+
+  launchDirect(args) {
+    this.setStatus({ elevated: this.electronAdmin });
+    const child = spawn(this.exe, args, { windowsHide: true, stdio: 'ignore' });
+    this.child = child;
+    child.on('error', (err) => this.emit('log', `sensor: ${err.message}`));
+    child.on('exit', () => {
+      if (this.child === child) this.child = null;
+    });
+  }
+
+  launchElevated(args) {
+    const list = args.map((a) => psQuote(a.includes(' ') ? `"${a}"` : a)).join(',');
+    const script = [
+      '$ErrorActionPreference = "Stop"',
+      'try {',
+      `  Start-Process -FilePath ${psQuote(this.exe)} -ArgumentList @(${list}) -Verb RunAs -WindowStyle Hidden`,
+      '  exit 0',
+      '} catch { exit 1 }',
+    ].join('\n');
+    const encoded = Buffer.from(script, 'utf16le').toString('base64');
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { windowsHide: true }, (err) => {
+      if (this.stopping) return;
+      if (err) {
+        this.setStatus({ elevationDenied: true, elevated: false });
+        this.launchDirect(args);
+      } else {
+        this.setStatus({ elevationDenied: false, elevated: true });
+      }
+    });
+  }
+
+  onConnection(socket) {
+    if (this.socket) {
+      socket.destroy();
+      return;
+    }
+    this.socket = socket;
+    this.setStatus({ running: true, missing: false });
+    socket.setEncoding('utf8');
+    let buffer = '';
+    socket.on('data', (chunk) => {
+      buffer += chunk;
+      let index;
+      while ((index = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        if (!line) continue;
+        try {
+          const data = JSON.parse(line);
+          if (data.type === 'sensors') {
+            this.crashes = 0;
+            this.emit('data', data);
+          } else if (data.type === 'error') {
+            this.emit('log', `sensor: ${data.message}`);
+          }
+        } catch {
+          this.emit('log', `linha inválida: ${line.slice(0, 120)}`);
+        }
+      }
+    });
+    socket.on('error', () => {});
+    socket.on('close', () => {
+      if (this.socket !== socket) return;
+      this.socket = null;
+      this.setStatus({ running: false });
+      if (!this.stopping) this.scheduleRestart();
+    });
+  }
+
+  scheduleRestart() {
+    this.crashes += 1;
+    if (this.crashes > 5) return;
+    clearTimeout(this.restartTimer);
+    this.restartTimer = setTimeout(() => this.start({ elevated: false, fps: this.fps }), 2000 * this.crashes);
+  }
+
+  send(command) {
+    if (this.socket && !this.socket.destroyed) this.socket.write(`${command}\n`);
+  }
+
+  setFps(on) {
+    this.fps = on;
+    this.send(`fps ${on ? 'on' : 'off'}`);
+  }
+
+  stop() {
+    this.stopping = true;
+    clearTimeout(this.restartTimer);
+    if (this.socket) {
+      try {
+        this.socket.write('quit\n');
+      } catch {}
+      this.socket.destroy();
+      this.socket = null;
+    }
+    if (this.server) {
+      this.server.close();
+      this.server = null;
+    }
+    if (this.child) {
+      const child = this.child;
+      this.child = null;
+      setTimeout(() => {
+        if (child.exitCode === null) child.kill();
+      }, 1500);
+    }
+  }
+}
+
+module.exports = { Sensors };

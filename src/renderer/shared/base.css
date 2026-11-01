@@ -1,0 +1,39 @@
+:root {
+  --accent: #5ee6ff;
+  --bg-alpha: 0.82;
+  --scale: 1;
+  --text: #eef2f7;
+  --muted: #8d97a7;
+  --dim: #5a6373;
+  --line: rgba(255, 255, 255, 0.07);
+  --warn: #ffb547;
+  --hot: #ff5c5c;
+  --font: 'Geist Variable', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'Geist Mono Variable', 'Cascadia Mono', ui-monospace, monospace;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-level='warn'] {
+  --tone: var(--warn);
+}
+
+[data-level='hot'] {
+  --tone: var(--hot);
+}
