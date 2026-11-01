@@ -112,7 +112,7 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 
 ### Gravação de vídeo
 
-![Gravação de vídeo com os botões de som do PC e microfone](docs/images/gravacao.png)
+![Gravando uma área da tela: escolher a área, ligar o microfone, gravar, parar e colar](docs/images/gravacao.gif)
 
 - Escolha a área e grave com o **som do PC** e o **microfone**, ligando e desligando cada um na hora.
 - Uma barra flutuante mostra o tempo e deixa pausar, continuar e parar.
