@@ -1,0 +1,25 @@
+name: Origem do PR
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+jobs:
+  origem-da-develop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: O main só aceita PR vindo da develop deste repositório
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REF" != "develop" ] || [ "$HEAD_REPO" != "$BASE_REPO" ]; then
+            echo "::error::O main só recebe PR da branch develop deste repositório (veio de $HEAD_REPO:$HEAD_REF)."
+            exit 1
+          fi
+          echo "PR vindo da develop: ok"
