@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('hud', {
   restartSensors: (elevated) => ipcRenderer.invoke('sensors:restart', elevated),
   moveToDisplay: (id) => ipcRenderer.invoke('overlay:move-to-display', id),
   openPawnIo: () => ipcRenderer.invoke('open:pawnio'),
+  openUpdate: () => ipcRenderer.invoke('open:update'),
   openSettings: () => ipcRenderer.invoke('open:settings'),
   resize: (width, height) => ipcRenderer.send('overlay:resize', { width, height }),
   setHandleRect: (rect) => ipcRenderer.send('overlay:handle', rect),

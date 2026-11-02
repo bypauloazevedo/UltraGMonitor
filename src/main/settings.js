@@ -8,6 +8,8 @@ const DEFAULTS = {
   layout: 'card',
   cardLayout: 'grid',
   compactLayout: 'list',
+  updateCheck: true,
+  updateNotified: null,
   scale: 1,
   scales: {},
   opacity: 0.82,

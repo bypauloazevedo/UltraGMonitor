@@ -149,6 +149,7 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 - **Tema** escuro, claro ou o mesmo do Windows.
 - **Português, inglês e espanhol.** O idioma muda o app inteiro: widget, captura, bandeja, avisos e até o nome dos arquivos salvos.
 - Todos os atalhos são configuráveis, e o app avisa se outro programa já usa a tecla.
+- Avisa quando sai versão nova, com um botão pra baixar.
 
 ## Instalação
 
@@ -157,6 +158,10 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 3. Pronto: o widget aparece no canto da tela e o ícone fica na bandeja.
 
 **Requisitos:** Windows 10 ou 11, 64 bits.
+
+### Atualizando
+
+Quando sai uma versão nova, o UltraGMonitor avisa com uma notificação do Windows e um item na bandeja. É só baixar o instalador novo e rodar por cima: não precisa desinstalar, e as suas configurações continuam do jeito que estavam.
 
 > **Aviso do Windows:** o instalador ainda não tem assinatura digital. Se o Windows mostrar "O Windows protegeu o computador", clique em **Mais informações → Executar assim mesmo**. Com o Smart App Control ligado, o Windows bloqueia instaladores sem assinatura. A assinatura digital está nos planos.
 
@@ -189,7 +194,7 @@ Dentro da captura:
 ## Privacidade
 
 - Sem conta, sem anúncio e sem telemetria.
-- A única conexão com a internet é com o Open-Meteo, pra buscar a cidade e o clima.
+- O app só se conecta a dois lugares: o Open-Meteo, pra buscar a cidade e o clima, e o GitHub, uma vez por dia, pra ver se saiu versão nova (dá pra desligar na aba Sistema).
 - Prints e vídeos ficam só no seu computador.
 - As configurações ficam num arquivo local, na pasta de dados do app (`%APPDATA%\UltraGMonitor`).
 
