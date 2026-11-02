@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, globalShortcut, nativeImage, nativeTheme, screen, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, globalShortcut, nativeImage, nativeTheme, screen, shell } = require('electron');
 const path = require('path');
 const { execFile, execFileSync } = require('child_process');
 const settings = require('./settings');
@@ -10,6 +10,7 @@ const { Weather, searchCity } = require('./weather');
 const { Capture } = require('./capture');
 const { Toast } = require('./toast');
 const { Recorder } = require('./recorder');
+const { Updates } = require('./updates');
 const i18n = require('../renderer/shared/i18n');
 const { t } = i18n;
 
@@ -35,6 +36,8 @@ let lastSensors = null;
 let capture = null;
 let toast = null;
 let recorder = null;
+let updates = null;
+let updateNotice = null;
 
 function toggleRecording() {
   if (recorder.active) recorder.stop();
@@ -68,6 +71,7 @@ function state() {
     hotkeys: hotkeys(),
     hotkeyStatus,
     version: app.getVersion(),
+    update: updates ? updates.latest : null,
   };
 }
 
@@ -145,6 +149,7 @@ function applySettings(patch) {
     broadcast('state', state());
   }
   if (patch.startWithWindows !== undefined && patch.startWithWindows !== before.startWithWindows) setStartWithWindows(!!next.startWithWindows);
+  if (patch.updateCheck === true && before.updateCheck === false) updates.check();
   broadcast('settings', next);
   refreshTray();
   return next;
@@ -240,7 +245,9 @@ function refreshTray() {
     checked: Math.abs(s.opacity - value) < 0.01,
     click: () => applySettings({ opacity: value }),
   });
+  const update = updates && updates.latest;
   const menu = Menu.buildFromTemplate([
+    ...(update ? [{ label: t('Baixar a versão {v}', { v: update.version }), click: openUpdate }, { type: 'separator' }] : []),
     { label: t('Capturar tela'), accelerator: hotkeys().capture || undefined, click: () => capture.start() },
     {
       label: recorder && recorder.active ? t('Parar gravação') : t('Gravar vídeo'),
@@ -266,6 +273,24 @@ function refreshTray() {
   ]);
   tray.setContextMenu(menu);
   tray.setToolTip('UltraGMonitor');
+}
+
+function openUpdate() {
+  if (updates && updates.latest) shell.openExternal(updates.latest.url);
+}
+
+function onUpdate(info) {
+  refreshTray();
+  broadcast('state', state());
+  if (settings.get().updateNotified === info.version || !Notification.isSupported()) return;
+  settings.update({ updateNotified: info.version });
+  updateNotice = new Notification({
+    title: t('Nova versão do UltraGMonitor'),
+    body: t('A versão {v} já pode ser baixada. Clique pra abrir a página.', { v: info.version }),
+    icon: paths.asset('icon.png'),
+  });
+  updateNotice.on('click', openUpdate);
+  updateNotice.show();
 }
 
 function createTray() {
@@ -307,6 +332,7 @@ function registerIpc() {
   ipcMain.handle('sensors:restart', (_e, elevated) => startSensors(!!elevated));
   ipcMain.handle('overlay:move-to-display', (_e, id) => overlay.moveToDisplay(id));
   ipcMain.handle('open:pawnio', () => shell.openExternal(PAWNIO_URL));
+  ipcMain.handle('open:update', openUpdate);
   ipcMain.handle('open:settings', () => openSettings());
   ipcMain.handle('dock:info', () => overlay.dockInfo(overlay.dockExtra));
   ipcMain.handle('background:choose', async () => {
@@ -400,6 +426,9 @@ app.whenReady().then(() => {
 
   startSensors(s.adminSensors || s.fpsEnabled);
   weather.start();
+  updates = new Updates(app.getVersion(), () => settings.get().updateCheck !== false);
+  updates.on('update', onUpdate);
+  updates.start();
 
   screen.on('display-added', () => {
     refreshTray();
@@ -419,5 +448,6 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   if (sensors) sensors.stop();
   if (weather) weather.stop();
+  if (updates) updates.stop();
   settings.flush();
 });

@@ -159,6 +159,7 @@ function renderSwitches() {
     $(id).checked = !!settings[id];
   }
   $('captureCloseOnCopy').checked = settings.captureCloseOnCopy !== false;
+  $('updateCheck').checked = settings.updateCheck !== false;
   renderHardwareNames();
 }
 
@@ -269,6 +270,13 @@ function statusItem(level, title, detail) {
   }
   li.appendChild(body);
   return li;
+}
+
+function renderVersion() {
+  const update = appState && appState.update;
+  const version = (appState && appState.version) || '';
+  $('version-text').textContent = update ? t('Nova versão {v} disponível', { v: update.version }) : t('Versão {v}', { v: version });
+  $('update-open').hidden = !update;
 }
 
 function renderStatus() {
@@ -467,6 +475,7 @@ function renderAll() {
   renderDisks();
   renderDisplays();
   renderStatus();
+  renderVersion();
   renderLock();
   renderHotkeys();
   scheduleLayout();
@@ -636,7 +645,7 @@ function bind() {
   }
   $('bg-choose').addEventListener('click', () => window.hud.chooseBackground());
   $('bg-clear').addEventListener('click', () => window.hud.clearBackground());
-  for (const id of ['clock24h', 'showSeconds', 'adminSensors', 'startWithWindows', 'hoverFade', 'captureCloseOnCopy', 'recordSystemAudio', 'recordMic']) {
+  for (const id of ['clock24h', 'showSeconds', 'adminSensors', 'startWithWindows', 'hoverFade', 'captureCloseOnCopy', 'recordSystemAudio', 'recordMic', 'updateCheck']) {
     $(id).addEventListener('change', (e) => save({ [id]: e.target.checked }));
   }
   $('fpsEnabled').addEventListener('change', (e) => {
@@ -648,6 +657,7 @@ function bind() {
   $('lock').addEventListener('click', () => save({ locked: !settings.locked }));
   $('restart-admin').addEventListener('click', () => window.hud.restartSensors(true));
   $('pawnio').addEventListener('click', () => window.hud.openPawnIo());
+  $('update-open').addEventListener('click', () => window.hud.openUpdate());
 
   let timer = null;
   let seq = 0;
@@ -697,6 +707,7 @@ async function init() {
   window.hud.onState((next) => {
     appState = next;
     renderStatus();
+    renderVersion();
     renderDisplays();
     renderHotkeys();
     scheduleLayout();

@@ -102,6 +102,17 @@
           <span>Iniciar com o Windows</span>
           <input type="checkbox" id="startWithWindows" class="switch" />
         </label>
+        <label class="switch-row">
+          <span>
+            Avisar quando sair versão nova
+            <small>O app olha o GitHub uma vez por dia e avisa se tiver versão mais nova</small>
+          </span>
+          <input type="checkbox" id="updateCheck" class="switch" />
+        </label>
+        <div class="field row-field">
+          <span class="label" id="version-text"></span>
+          <button class="btn" id="update-open" hidden>Baixar</button>
+        </div>
       </section>
 
       <section data-tab="captura">
