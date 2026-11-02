@@ -67,7 +67,8 @@ body.peek #hud {
 }
 
 .surface:not(.dock) > :not(.media, .grip, .foot),
-.surface:not(.dock) > .foot > * {
+.surface:not(.dock) > .foot > *,
+.mini:not(.bar) > .row > * {
   opacity: var(--fg-alpha);
 }
 
