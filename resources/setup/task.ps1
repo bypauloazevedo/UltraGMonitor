@@ -22,9 +22,13 @@ if ($Enable -and (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinu
   exit 0
 }
 
+$wasDisabled = (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue).State -eq 'Disabled'
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $action = New-ScheduledTaskAction -Execute $Exe -Argument '--autostart'
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+if ($wasDisabled) {
+  Disable-ScheduledTask -TaskName $name | Out-Null
+}
