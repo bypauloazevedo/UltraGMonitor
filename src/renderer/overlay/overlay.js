@@ -284,10 +284,15 @@ function build() {
   lastIcon = '';
   if (isDock()) root.innerHTML = buildDock();
   else root.innerHTML = settings.layout === 'card' ? buildCard() : buildMini();
+  root.classList.remove('gutter-t', 'gutter-b');
   if (!isDock()) {
-    const surface = root.querySelector('.surface');
-    if (settings.locked) surface.insertAdjacentHTML('beforeend', handle());
-    else root.insertAdjacentHTML('beforeend', toolbar());
+    if (settings.locked) {
+      const a = anchor();
+      root.classList.add(`gutter-${a.y}`);
+      root.insertAdjacentHTML('beforeend', handle());
+    } else {
+      root.insertAdjacentHTML('beforeend', toolbar());
+    }
   }
   if (fpsEnter) {
     fpsEnter = false;

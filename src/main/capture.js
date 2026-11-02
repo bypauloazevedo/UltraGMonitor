@@ -1,7 +1,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { app, BrowserWindow, clipboard, desktopCapturer, dialog, globalShortcut, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, clipboard, ClipboardItem, desktopCapturer, dialog, globalShortcut, nativeImage, screen } = require('electron');
 const paths = require('./paths');
 const { t } = require('../renderer/shared/i18n');
 
@@ -160,12 +160,14 @@ class Capture {
     return display;
   }
 
-  copy(buffer) {
-    const image = nativeImage.createFromBuffer(Buffer.from(buffer));
+  async copy(buffer) {
+    const png = Buffer.from(buffer);
     let ok = false;
     for (let i = 0; i < 3 && !ok; i++) {
-      clipboard.writeImage(image);
-      ok = !clipboard.readImage().isEmpty();
+      try {
+        await clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]);
+        ok = await clipboard.has('image/png');
+      } catch {}
     }
     const display = this.display;
     const keepOpen = this.getSettings().captureCloseOnCopy === false;
