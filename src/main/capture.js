@@ -3,6 +3,7 @@ const os = require('os');
 const path = require('path');
 const { app, BrowserWindow, clipboard, ClipboardItem, desktopCapturer, dialog, globalShortcut, nativeImage, screen } = require('electron');
 const paths = require('./paths');
+const folders = require('./folders');
 const { t } = require('../renderer/shared/i18n');
 
 const SHOT_FILE = path.join(os.tmpdir(), 'ultragmonitor-shot.rgba');
@@ -160,8 +161,22 @@ class Capture {
     return display;
   }
 
+  keep(png) {
+    if (this.getSettings().autoSaveShots === false) return;
+    try {
+      const folder = folders.ensure('shots');
+      const name = `${t('Print')} ${stamp()}`;
+      let file = path.join(folder, `${name}.png`);
+      for (let i = 2; fs.existsSync(file); i++) file = path.join(folder, `${name} (${i}).png`);
+      fs.writeFileSync(file, png);
+    } catch (err) {
+      console.error('não deu pra guardar o print', err);
+    }
+  }
+
   async copy(buffer) {
     const png = Buffer.from(buffer);
+    this.keep(png);
     let ok = false;
     for (let i = 0; i < 3 && !ok; i++) {
       try {
@@ -178,8 +193,7 @@ class Capture {
   }
 
   async save(buffer) {
-    const folder = path.join(app.getPath('pictures'), 'UltraGMonitor');
-    fs.mkdirSync(folder, { recursive: true });
+    const folder = folders.ensure('shots');
     this.releaseKeys();
     const result = await dialog.showSaveDialog(this.win, {
       title: t('Salvar print'),
@@ -199,10 +213,28 @@ class Capture {
 
   pin(buffer, rect) {
     const { bounds } = this.display;
+    this.keep(Buffer.from(buffer));
     const image = nativeImage.createFromBuffer(Buffer.from(buffer));
+    this.openPin(image, { x: bounds.x + rect.x, y: bounds.y + rect.y, width: rect.width, height: rect.height });
+    this.close();
+  }
+
+  pinFile(file) {
+    const image = nativeImage.createFromPath(file);
+    if (image.isEmpty()) return;
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const area = display.workArea;
+    const size = image.getSize();
+    const scale = Math.min(1 / display.scaleFactor, (area.width * 0.6) / size.width, (area.height * 0.6) / size.height);
+    const width = size.width * scale;
+    const height = size.height * scale;
+    this.openPin(image, { x: area.x + (area.width - width) / 2, y: area.y + (area.height - height) / 2, width, height });
+  }
+
+  openPin(image, rect) {
     const pin = new BrowserWindow({
-      x: Math.round(bounds.x + rect.x),
-      y: Math.round(bounds.y + rect.y),
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
       width: Math.max(40, Math.round(rect.width)),
       height: Math.max(40, Math.round(rect.height)),
       frame: false,
@@ -221,7 +253,6 @@ class Capture {
     pin.setAlwaysOnTop(true, 'floating');
     pin.loadFile(paths.page('pin'));
     pin.webContents.once('did-finish-load', () => pin.webContents.send('pin:image', image.toDataURL()));
-    this.close();
   }
 }
 

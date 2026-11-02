@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
-const { execFile } = require('child_process');
-const { app, BrowserWindow, desktopCapturer } = require('electron');
+const { BrowserWindow, desktopCapturer } = require('electron');
 const paths = require('./paths');
+const folders = require('./folders');
+const { copyFileToClipboard } = require('./clipfile');
 const { t } = require('../renderer/shared/i18n');
 
 const BAR = { width: 236, height: 48 };
@@ -11,12 +12,6 @@ function stamp() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
-}
-
-function copyFileToClipboard(file) {
-  const command = `Set-Clipboard -Path '${file.replace(/'/g, "''")}'`;
-  const encoded = Buffer.from(command, 'utf16le').toString('base64');
-  execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { windowsHide: true }, () => {});
 }
 
 function popup(options) {
@@ -174,8 +169,7 @@ class Recorder {
     const display = this.display;
     this.cleanup();
     try {
-      const folder = path.join(app.getPath('videos'), 'UltraGMonitor');
-      fs.mkdirSync(folder, { recursive: true });
+      const folder = folders.ensure('videos');
       const ext = mime.includes('mp4') ? 'mp4' : 'webm';
       const file = path.join(folder, `${t('Gravação')} ${stamp()}.${ext}`);
       fs.writeFileSync(file, Buffer.from(data));

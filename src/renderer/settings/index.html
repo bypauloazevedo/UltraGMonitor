@@ -57,11 +57,11 @@
       <section data-tab="sistema">
         <h2>Sensores</h2>
         <ul class="status" id="status"></ul>
-        <div class="actions">
+        <div class="actions win-only">
           <button class="btn" id="restart-admin">Reiniciar sensores como admin</button>
           <button class="btn ghost" id="pawnio">Baixar PawnIO</button>
         </div>
-        <label class="switch-row">
+        <label class="switch-row win-only">
           <span>
             Pedir admin ao abrir
             <small>Sem admin não dá pra ler FPS, temperatura da CPU e do SSD</small>
@@ -90,6 +90,13 @@
 
       <section data-tab="sistema">
         <h2>Geral</h2>
+        <label class="switch-row">
+          <span>
+            Monitoramento
+            <small>Desligado, o widget some e o app fica só na bandeja, com a captura e a gravação</small>
+          </span>
+          <input type="checkbox" id="monitoring" class="switch" />
+        </label>
         <div class="field">
           <span class="label">Idioma</span>
           <div class="segmented" id="language" data-no-i18n>
@@ -99,7 +106,7 @@
           </div>
         </div>
         <label class="switch-row">
-          <span>Iniciar com o Windows</span>
+          <span id="startWithWindows-label">Iniciar com o Windows</span>
           <input type="checkbox" id="startWithWindows" class="switch" />
         </label>
         <label class="switch-row">
@@ -117,6 +124,9 @@
 
       <section data-tab="captura">
         <h2>Print</h2>
+        <div class="actions">
+          <button class="btn" id="history-open">Ver últimos prints</button>
+        </div>
         <label class="switch-row">
           <span>
             Fechar a captura depois de copiar
@@ -124,7 +134,35 @@
           </span>
           <input type="checkbox" id="captureCloseOnCopy" class="switch" />
         </label>
-        <small class="help">Os prints salvos vão pra Imagens\UltraGMonitor.</small>
+        <label class="switch-row">
+          <span>
+            Guardar uma cópia de cada print
+            <small>Todo print copiado também vira um arquivo PNG na pasta dos prints</small>
+          </span>
+          <input type="checkbox" id="autoSaveShots" class="switch" />
+        </label>
+      </section>
+
+      <section data-tab="captura">
+        <h2>Pastas</h2>
+        <div class="folder" data-kind="shots">
+          <span class="label">Prints</span>
+          <span class="folder-path" data-no-i18n></span>
+          <div class="actions">
+            <button class="btn ghost" data-folder="open">Abrir</button>
+            <button class="btn ghost" data-folder="choose">Trocar</button>
+            <button class="btn ghost" data-folder="reset">Voltar pra padrão</button>
+          </div>
+        </div>
+        <div class="folder" data-kind="videos">
+          <span class="label">Vídeos</span>
+          <span class="folder-path" data-no-i18n></span>
+          <div class="actions">
+            <button class="btn ghost" data-folder="open">Abrir</button>
+            <button class="btn ghost" data-folder="choose">Trocar</button>
+            <button class="btn ghost" data-folder="reset">Voltar pra padrão</button>
+          </div>
+        </div>
       </section>
 
       <section data-tab="captura">
@@ -140,7 +178,7 @@
           <span>Gravar o microfone</span>
           <input type="checkbox" id="recordMic" class="switch" />
         </label>
-        <small class="help">Também dá pra ligar e desligar na hora, nos botões da barra da captura. Os vídeos vão pra Vídeos\UltraGMonitor e ficam prontos pra colar com Ctrl+V.</small>
+        <small class="help">Também dá pra ligar e desligar na hora, nos botões da barra da captura. Os vídeos ficam prontos pra colar com Ctrl+V.</small>
       </section>
 
       <section data-tab="conteudo">
@@ -172,7 +210,7 @@
         </div>
       </section>
 
-      <section data-tab="conteudo">
+      <section data-tab="conteudo" class="win-only">
         <h2>FPS</h2>
         <label class="switch-row">
           <span>
@@ -195,7 +233,16 @@
       <section data-tab="atalhos">
         <h2>Atalhos</h2>
         <div class="hotkeys" id="hotkeys"></div>
-        <small class="help" id="hotkey-help">Clique no atalho e aperte a tecla ou a combinação. Esc cancela, Backspace remove. Pra usar a Print Screen, desligue no Windows: Configurações → Acessibilidade → Teclado → "Usar a tecla Print Screen para abrir a captura de tela".</small>
+        <label class="switch-row win-only">
+          <span>
+            Usar Win+Shift+S pra abrir a captura
+            <small>No lugar da Ferramenta de Captura do Windows. Desligado, o atalho volta a ser do Windows. Com um jogo aberto como admin na frente, o app também precisa estar como admin pra pegar o atalho.</small>
+          </span>
+          <input type="checkbox" id="captureWinShiftS" class="switch" />
+        </label>
+        <small class="help" id="hotkey-help">Clique no atalho e aperte a tecla ou a combinação. Esc cancela, Backspace remove.</small>
+        <small class="help win-only">Pra usar a Print Screen, desligue no Windows: Configurações → Acessibilidade → Teclado → "Usar a tecla Print Screen para abrir a captura de tela".</small>
+        <small class="help linux-only">No Ubuntu com Wayland, os atalhos do app só funcionam com ele em foco. Crie um atalho do sistema (Configurações → Teclado → Atalhos personalizados) com o comando "ultragmonitor --capture". Também valem --record e --history.</small>
       </section>
 
       <section data-tab="aparencia">
@@ -215,9 +262,9 @@
             <button data-value="card">Card</button>
             <button data-value="compact">Compacto</button>
             <button data-value="bar">Barra</button>
-            <button data-value="dock">Dock</button>
+            <button data-value="dock" class="win-only">Dock</button>
           </div>
-          <small class="help">Dock fica na barra de tarefas do Windows. Também dá pra destravar o widget e arrastar ele até a barra: ele encaixa sozinho.</small>
+          <small class="help win-only">Dock fica na barra de tarefas do Windows. Também dá pra destravar o widget e arrastar ele até a barra: ele encaixa sozinho.</small>
         </div>
         <div class="field" id="card-layout-field">
           <span class="label">Arrumação do Card</span>

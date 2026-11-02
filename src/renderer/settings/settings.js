@@ -22,6 +22,15 @@ function save(patch) {
   return window.hud.setSettings(patch);
 }
 
+function isLinux() {
+  return !!appState && appState.platform === 'linux';
+}
+
+function renderPlatform() {
+  document.body.dataset.platform = isLinux() ? 'linux' : 'win32';
+  $('startWithWindows-label').textContent = t(isLinux() ? 'Iniciar com o sistema' : 'Iniciar com o Windows');
+}
+
 function setFill(input) {
   const pct = ((input.value - input.min) / (input.max - input.min)) * 100;
   input.style.setProperty('--fill', `${pct}%`);
@@ -149,17 +158,19 @@ function renderModules() {
     }
   }
   for (const btn of wrap.children) {
+    btn.hidden = btn.dataset.key === 'fps' && isLinux();
     btn.classList.toggle('on', !!settings.modules[btn.dataset.key]);
     btn.textContent = t(MODULES.find(([key]) => key === btn.dataset.key)[1]);
   }
 }
 
 function renderSwitches() {
-  for (const id of ['clock24h', 'showSeconds', 'fpsEnabled', 'adminSensors', 'startWithWindows', 'hoverFade', 'recordSystemAudio', 'recordMic']) {
+  for (const id of ['clock24h', 'showSeconds', 'fpsEnabled', 'adminSensors', 'startWithWindows', 'hoverFade', 'recordSystemAudio', 'recordMic', 'captureWinShiftS']) {
     $(id).checked = !!settings[id];
   }
-  $('captureCloseOnCopy').checked = settings.captureCloseOnCopy !== false;
-  $('updateCheck').checked = settings.updateCheck !== false;
+  for (const id of ['captureCloseOnCopy', 'updateCheck', 'monitoring', 'autoSaveShots']) {
+    $(id).checked = settings[id] !== false;
+  }
   renderHardwareNames();
 }
 
@@ -279,6 +290,17 @@ function renderVersion() {
   $('update-open').hidden = !update;
 }
 
+const FOLDER_KEYS = { shots: 'shotsFolder', videos: 'videosFolder' };
+
+function renderFolders() {
+  const folders = (appState && appState.folders) || {};
+  for (const row of document.querySelectorAll('.folder')) {
+    const kind = row.dataset.kind;
+    row.querySelector('.folder-path').textContent = folders[kind] || '';
+    row.querySelector('[data-folder="reset"]').hidden = !settings[FOLDER_KEYS[kind]];
+  }
+}
+
 function renderStatus() {
   const list = $('status');
   list.innerHTML = '';
@@ -288,6 +310,10 @@ function renderStatus() {
     return;
   }
   list.appendChild(statusItem(st.running ? 'ok' : 'warn', st.running ? 'Lendo sensores' : 'Sensores parados'));
+  if (isLinux()) {
+    list.appendChild(statusItem('warn', 'FPS ainda não funciona no Linux', 'CPU, GPU, RAM, disco, relógio, clima, captura e gravação funcionam normal.'));
+    return;
+  }
   const admin = sensors ? sensors.admin : false;
   list.appendChild(
     statusItem(
@@ -315,6 +341,7 @@ function renderLock() {
 const HOTKEY_ROWS = [
   ['capture', 'Capturar tela'],
   ['record', 'Gravar vídeo (aperta de novo pra parar)'],
+  ['history', 'Abrir os últimos prints'],
   ['lock', 'Destravar / travar pra mover e redimensionar'],
   ['fps', 'Liga / desliga FPS'],
   ['visible', 'Mostrar / esconder o monitor'],
@@ -374,6 +401,7 @@ function renderHotkeys() {
   const status = (appState && appState.hotkeyStatus) || {};
   wrap.innerHTML = '';
   for (const [id, label] of HOTKEY_ROWS) {
+    if (id === 'fps' && isLinux()) continue;
     const row = document.createElement('div');
     row.className = 'hotkey';
     const name = document.createElement('span');
@@ -465,6 +493,7 @@ function onHotkeyKey(e) {
 }
 
 function renderAll() {
+  renderPlatform();
   renderVisual();
   renderAccents();
   renderTypography();
@@ -476,6 +505,7 @@ function renderAll() {
   renderDisplays();
   renderStatus();
   renderVersion();
+  renderFolders();
   renderLock();
   renderHotkeys();
   scheduleLayout();
@@ -545,10 +575,10 @@ function layoutColumns() {
   const style = getComputedStyle(main);
   const gap = parseFloat(style.columnGap) || 12;
   const inner = main.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-  const visible = sections.filter((s) => s.dataset.tab === activeTab);
+  const visible = sections.filter((s) => s.dataset.tab === activeTab && !(isLinux() && s.classList.contains('win-only')));
   const count = Math.max(1, Math.min(3, visible.length, Math.floor((inner + gap) / (COLUMN_MIN + gap))));
   for (const s of sections) {
-    if (s.dataset.tab !== activeTab && s.parentElement !== stash) stash.appendChild(s);
+    if (!visible.includes(s) && s.parentElement !== stash) stash.appendChild(s);
   }
   if (visible.some((s) => !main.contains(s)) || main.children.length !== count) {
     layoutKey = '';
@@ -645,8 +675,15 @@ function bind() {
   }
   $('bg-choose').addEventListener('click', () => window.hud.chooseBackground());
   $('bg-clear').addEventListener('click', () => window.hud.clearBackground());
-  for (const id of ['clock24h', 'showSeconds', 'adminSensors', 'startWithWindows', 'hoverFade', 'captureCloseOnCopy', 'recordSystemAudio', 'recordMic', 'updateCheck']) {
+  for (const id of ['clock24h', 'showSeconds', 'adminSensors', 'startWithWindows', 'hoverFade', 'captureCloseOnCopy', 'recordSystemAudio', 'recordMic', 'updateCheck', 'monitoring', 'autoSaveShots', 'captureWinShiftS']) {
     $(id).addEventListener('change', (e) => save({ [id]: e.target.checked }));
+  }
+  $('history-open').addEventListener('click', () => window.hud.openHistory());
+  for (const row of document.querySelectorAll('.folder')) {
+    const kind = row.dataset.kind;
+    row.querySelector('[data-folder="open"]').addEventListener('click', () => window.hud.openFolder(kind));
+    row.querySelector('[data-folder="choose"]').addEventListener('click', () => window.hud.chooseFolder(kind));
+    row.querySelector('[data-folder="reset"]').addEventListener('click', () => save({ [FOLDER_KEYS[kind]]: null }));
   }
   $('fpsEnabled').addEventListener('change', (e) => {
     const on = e.target.checked;
@@ -708,6 +745,7 @@ async function init() {
     appState = next;
     renderStatus();
     renderVersion();
+    renderFolders();
     renderDisplays();
     renderHotkeys();
     scheduleLayout();

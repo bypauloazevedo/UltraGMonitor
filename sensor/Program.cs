@@ -14,6 +14,7 @@ namespace HudSensor
     internal static class Program
     {
         private static volatile bool _running = true;
+        private static volatile bool _monitor = true;
         private static volatile int _interval = 1000;
         private static readonly object WriteLock = new object();
         private static StreamWriter _writer;
@@ -63,12 +64,18 @@ namespace HudSensor
 
             using (var hardware = new HardwareReader())
             using (var fps = new FpsTracker(presentMon))
+            using (var hook = new KeyHook(SendCaptureKey))
             {
                 if (fpsOnStart) fps.SetEnabled(true);
-                if (pipe != null) ListenCommands(new StreamReader(pipe, encoding), fps);
+                if (pipe != null) ListenCommands(new StreamReader(pipe, encoding), fps, hook);
 
                 while (_running && (pipe == null || pipe.IsConnected))
                 {
+                    if (!_monitor)
+                    {
+                        Thread.Sleep(250);
+                        continue;
+                    }
                     var started = Stopwatch.StartNew();
                     try
                     {
@@ -108,7 +115,18 @@ namespace HudSensor
             return 0;
         }
 
-        private static void ListenCommands(StreamReader reader, FpsTracker fps)
+        private static void SendCaptureKey()
+        {
+            try
+            {
+                Send(new JsonWriter().BeginObject().Prop("type", "key").Prop("name", "capture").EndObject().ToString());
+            }
+            catch
+            {
+            }
+        }
+
+        private static void ListenCommands(StreamReader reader, FpsTracker fps, KeyHook hook)
         {
             Task.Run(async () =>
             {
@@ -128,6 +146,12 @@ namespace HudSensor
                                 break;
                             case "shot":
                                 TakeShot(line.Trim().Split(new[] { ' ' }, 7));
+                                break;
+                            case "hook":
+                                hook.SetEnabled(parts.Length > 1 && parts[1] == "on");
+                                break;
+                            case "monitor":
+                                _monitor = parts.Length > 1 && parts[1] == "on";
                                 break;
                             case "quit":
                                 _running = false;

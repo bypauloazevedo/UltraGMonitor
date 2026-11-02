@@ -26,6 +26,8 @@ class Sensors extends EventEmitter {
     this.socket = null;
     this.child = null;
     this.fps = false;
+    this.hook = false;
+    this.monitoring = true;
     this.stopping = false;
     this.crashes = 0;
     this.restartTimer = null;
@@ -97,6 +99,8 @@ class Sensors extends EventEmitter {
     }
     this.socket = socket;
     this.setStatus({ running: true, missing: false });
+    this.send(`monitor ${this.monitoring ? 'on' : 'off'}`);
+    this.send(`hook ${this.hook ? 'on' : 'off'}`);
     socket.setEncoding('utf8');
     let buffer = '';
     socket.on('data', (chunk) => {
@@ -117,6 +121,8 @@ class Sensors extends EventEmitter {
               this.shots.delete(data.id);
               pending(data);
             }
+          } else if (data.type === 'key') {
+            this.emit('key', data.name);
           } else if (data.type === 'error') {
             this.emit('log', `sensor: ${data.message}`);
           }
@@ -165,6 +171,16 @@ class Sensors extends EventEmitter {
   setFps(on) {
     this.fps = on;
     this.send(`fps ${on ? 'on' : 'off'}`);
+  }
+
+  setHook(on) {
+    this.hook = on;
+    this.send(`hook ${on ? 'on' : 'off'}`);
+  }
+
+  setMonitoring(on) {
+    this.monitoring = on;
+    this.send(`monitor ${on ? 'on' : 'off'}`);
   }
 
   stop() {
