@@ -1,6 +1,8 @@
 const { EventEmitter } = require('events');
+const { spawn } = require('child_process');
 
 const LATEST = 'https://api.github.com/repos/bypauloazevedo/UltraGMonitor/releases/latest';
+const WINGET_ID = 'PauloAzevedo.UltraGMonitor';
 const FIRST_CHECK = 30 * 1000;
 const EVERY = 24 * 60 * 60 * 1000;
 
@@ -56,4 +58,23 @@ class Updates extends EventEmitter {
   }
 }
 
-module.exports = { Updates, isNewer };
+function upgradeWithWinget() {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(
+        'winget',
+        ['upgrade', '--id', WINGET_ID, '-e', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity'],
+        { detached: true, windowsHide: true, stdio: 'ignore' },
+      );
+    } catch {
+      resolve(false);
+      return;
+    }
+    child.once('error', () => resolve(false));
+    child.once('exit', (code) => resolve(code === 0));
+    child.unref();
+  });
+}
+
+module.exports = { Updates, isNewer, upgradeWithWinget };

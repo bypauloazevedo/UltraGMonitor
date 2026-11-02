@@ -10,7 +10,7 @@ const { Weather, searchCity } = require('./weather');
 const { Capture } = require('./capture');
 const { Toast } = require('./toast');
 const { Recorder } = require('./recorder');
-const { Updates } = require('./updates');
+const { Updates, upgradeWithWinget } = require('./updates');
 const i18n = require('../renderer/shared/i18n');
 const { t } = i18n;
 
@@ -38,6 +38,7 @@ let toast = null;
 let recorder = null;
 let updates = null;
 let updateNotice = null;
+let updating = false;
 
 function toggleRecording() {
   if (recorder.active) recorder.stop();
@@ -247,7 +248,7 @@ function refreshTray() {
   });
   const update = updates && updates.latest;
   const menu = Menu.buildFromTemplate([
-    ...(update ? [{ label: t('Baixar a versão {v}', { v: update.version }), click: openUpdate }, { type: 'separator' }] : []),
+    ...(update ? [{ label: t('Atualizar pra versão {v}', { v: update.version }), enabled: !updating, click: openUpdate }, { type: 'separator' }] : []),
     { label: t('Capturar tela'), accelerator: hotkeys().capture || undefined, click: () => capture.start() },
     {
       label: recorder && recorder.active ? t('Parar gravação') : t('Gravar vídeo'),
@@ -275,8 +276,20 @@ function refreshTray() {
   tray.setToolTip('UltraGMonitor');
 }
 
-function openUpdate() {
-  if (updates && updates.latest) shell.openExternal(updates.latest.url);
+async function openUpdate() {
+  const update = updates && updates.latest;
+  if (!update || updating) return;
+  if (!app.isPackaged) {
+    shell.openExternal(update.url);
+    return;
+  }
+  updating = true;
+  refreshTray();
+  toast.show(`${t('Atualizando pra versão {v}', { v: update.version })}|${t('O app fecha e abre de novo sozinho')}`, 'ok');
+  const ok = await upgradeWithWinget();
+  updating = false;
+  refreshTray();
+  if (!ok) shell.openExternal(update.url);
 }
 
 function onUpdate(info) {
@@ -286,7 +299,7 @@ function onUpdate(info) {
   settings.update({ updateNotified: info.version });
   updateNotice = new Notification({
     title: t('Nova versão do UltraGMonitor'),
-    body: t('A versão {v} já pode ser baixada. Clique pra abrir a página.', { v: info.version }),
+    body: t('A versão {v} já pode ser instalada. Clique pra atualizar.', { v: info.version }),
     icon: paths.asset('icon.png'),
   });
   updateNotice.on('click', openUpdate);

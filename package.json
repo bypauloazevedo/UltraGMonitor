@@ -1,7 +1,7 @@
 {
   "name": "ultragmonitor",
   "productName": "UltraGMonitor",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Monitor de CPU, GPU, RAM, SSD, FPS, relógio e clima que fica num canto da tela",
   "author": "Paulo Azevedo",
   "license": "GPL-3.0-only",
@@ -80,6 +80,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "UltraGMonitor",
+      "uninstallDisplayName": "${productName}",
       "runAfterFinish": true,
       "include": "build/installer.nsh",
       "artifactName": "${productName}-Setup.${ext}",

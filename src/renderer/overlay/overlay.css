@@ -1,5 +1,6 @@
 :root {
   --clear: calc(1 - var(--bg-alpha));
+  --fg-alpha: calc(1 - var(--clear) * 0.5);
   --muted: color-mix(in srgb, #eef2f7 calc(var(--clear) * 60%), #aeb7c4);
   --dim: color-mix(in srgb, #d5dce6 calc(var(--clear) * 60%), #7d8796);
   --panel: rgba(255, 255, 255, calc(0.045 * var(--bg-alpha)));
@@ -63,6 +64,12 @@ body.peek #hud {
   isolation: isolate;
   background: rgba(12, 14, 19, var(--bg-alpha));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, calc(0.08 * var(--bg-alpha)));
+}
+
+.surface:not(.dock) > :not(.media, .grip, .foot),
+.surface:not(.dock) > .foot > *,
+.mini:not(.bar) > .row > * {
+  opacity: var(--fg-alpha);
 }
 
 .media {
@@ -662,14 +669,12 @@ body.peek #hud {
     padding-bottom: 0;
   }
   to {
-    opacity: 1;
     max-height: 8em;
   }
 }
 
 @keyframes fps-close-y {
   from {
-    opacity: 1;
     max-height: 8em;
   }
   to {
@@ -688,14 +693,12 @@ body.peek #hud {
     max-width: 0;
   }
   to {
-    opacity: 1;
     max-width: 20em;
   }
 }
 
 @keyframes fps-close-x {
   from {
-    opacity: 1;
     max-width: 20em;
   }
   to {
@@ -924,10 +927,17 @@ body.peek #hud {
   font-size: calc(14px * (1 + (var(--scale) - 1) * 0.5));
 }
 
+#hud.gutter-t {
+  padding-top: calc(14px * (1 + (var(--scale) - 1) * 0.5) * 2.4);
+}
+
+#hud.gutter-b {
+  padding-bottom: calc(14px * (1 + (var(--scale) - 1) * 0.5) * 2.4);
+}
+
 .handle {
   position: absolute;
-  right: 0.5em;
-  bottom: 0.5em;
+  right: 0;
   z-index: 2;
   width: 2em;
   height: 2em;
@@ -953,10 +963,12 @@ body.peek #hud {
   filter: none !important;
 }
 
-.bar > .handle {
-  top: 50%;
-  bottom: auto;
-  margin-top: -1em;
+.gutter-t > .handle {
+  top: 0;
+}
+
+.gutter-b > .handle {
+  bottom: 0;
 }
 
 body.handle-on .handle {
