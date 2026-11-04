@@ -168,7 +168,7 @@ class Overlay {
     const display = screen.getDisplayNearestPoint(cursor);
     const area = dockArea(display);
     const wasDock = this.isDock();
-    if (contains(area, cursor, 6)) {
+    if (process.platform === 'win32' && contains(area, cursor, 6)) {
       const offsetX = wasDock ? bounds.x - area.x : cursor.x - area.x - 24;
       this.settings.update({ dock: { displayId: display.id, offsetX: Math.max(0, Math.round(offsetX)) } });
       if (wasDock) this.place();
@@ -223,7 +223,8 @@ class Overlay {
 
   refreshVisibility() {
     if (!this.alive()) return;
-    const visible = !this.settings.get().hidden && !this.autoHidden;
+    const s = this.settings.get();
+    const visible = !s.hidden && s.monitoring !== false && !this.autoHidden;
     if (visible) {
       if (!this.win.isVisible()) this.win.showInactive();
       this.win.setAlwaysOnTop(true, 'screen-saver');

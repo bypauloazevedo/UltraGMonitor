@@ -6,20 +6,23 @@ const root = path.join(__dirname, '..');
 const work = path.join(root, '.build');
 const dist = path.join(root, 'dist');
 const keep = process.argv.includes('--keep');
+const windows = process.platform === 'win32';
 
 function run(args) {
   execFileSync(process.execPath, args, { cwd: root, stdio: 'inherit' });
 }
 
-run([path.join(__dirname, 'fetch-deps.js')]);
-run([path.join(__dirname, 'build-sensor.js')]);
+if (windows) {
+  run([path.join(__dirname, 'fetch-deps.js')]);
+  run([path.join(__dirname, 'build-sensor.js')]);
+}
 fs.rmSync(work, { recursive: true, force: true });
-run([require.resolve('electron-builder/cli.js'), '--win', 'nsis', '--publish', 'never']);
+run([require.resolve('electron-builder/cli.js'), ...(windows ? ['--win', 'nsis'] : ['--linux', 'AppImage', 'deb']), '--publish', 'never']);
 
-const setup = fs.readdirSync(work).find((f) => f.endsWith('-Setup.exe'));
-if (!setup) throw new Error('instalador não foi gerado');
+const outputs = fs.readdirSync(work).filter((f) => (windows ? f.endsWith('-Setup.exe') : /\.(AppImage|deb)$/.test(f)));
+if (!outputs.length) throw new Error('instalador não foi gerado');
 fs.rmSync(dist, { recursive: true, force: true });
 fs.mkdirSync(dist, { recursive: true });
-fs.copyFileSync(path.join(work, setup), path.join(dist, setup));
+for (const file of outputs) fs.copyFileSync(path.join(work, file), path.join(dist, file));
 if (!keep) fs.rmSync(work, { recursive: true, force: true });
-console.log(`instalador pronto: ${path.join(dist, setup)}`);
+for (const file of outputs) console.log(`instalador pronto: ${path.join(dist, file)}`);

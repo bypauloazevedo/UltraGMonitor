@@ -26,6 +26,7 @@ const ICONS = {
   save: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
   copy: '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3Z"/><circle cx="12" cy="13" r="3"/>',
   video: '<path d="m16 13 5.2 3.1a.5.5 0 0 0 .8-.4V8.3a.5.5 0 0 0-.8-.4L16 11"/><rect x="2" y="6" width="14" height="12" rx="2"/>',
   speaker: '<path d="M11 5 6 9H2v6h4l5 4Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
@@ -252,6 +253,7 @@ function buildBar() {
     <button data-act="undo" data-tip="${t('Desfazer')}" data-key="Ctrl+Z">${svg('undo')}</button>
     <button data-act="redo" data-tip="${t('Refazer')}" data-key="Ctrl+Y">${svg('redo')}</button>
     <span class="sep"></span>
+    <button data-act="history" data-tip="${t('Últimos prints')}">${svg('history')}</button>
     <button data-act="pin" data-tip="${t('Fixar na tela')}">${svg('pin')}</button>
     <button data-act="save" data-tip="${t('Salvar')}" data-key="Ctrl+S">${svg('save')}</button>
     <button data-act="copy" class="main" data-tip="${t('Copiar')}" data-key="Ctrl+C">${svg('copy')}</button>
@@ -379,6 +381,7 @@ async function exportPng() {
 
 async function act(name) {
   if (name === 'close') return window.hud.captureClose();
+  if (name === 'history') return window.hud.openHistory();
   if (name === 'undo') {
     if (shapes.length) undone.push(shapes.pop());
     return schedule();

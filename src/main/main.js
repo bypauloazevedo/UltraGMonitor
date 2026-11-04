@@ -1,16 +1,20 @@
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, globalShortcut, nativeImage, nativeTheme, screen, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, dialog, ipcMain, globalShortcut, nativeImage, nativeTheme, screen, shell } = require('electron');
 const path = require('path');
 const { execFile, execFileSync } = require('child_process');
 const settings = require('./settings');
 const paths = require('./paths');
+const folders = require('./folders');
 const background = require('./background');
 const { Overlay } = require('./overlay');
-const { Sensors } = require('./sensors');
+const IS_WIN = process.platform === 'win32';
+const { Sensors } = IS_WIN ? require('./sensors') : require('./sensors-linux');
+const { setLinuxAutostart } = require('./autostart');
 const { Weather, searchCity } = require('./weather');
 const { Capture } = require('./capture');
 const { Toast } = require('./toast');
 const { Recorder } = require('./recorder');
 const { Updates, upgradeWithWinget } = require('./updates');
+const { History } = require('./history');
 const i18n = require('../renderer/shared/i18n');
 const { t } = i18n;
 
@@ -21,6 +25,10 @@ const TITLE_BAR = {
 };
 
 app.disableHardwareAcceleration();
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('ozone-platform', 'x11');
+  app.commandLine.appendSwitch('enable-transparent-visuals');
+}
 app.setAppUserModelId('dev.paulo.ultragmonitor');
 background.registerScheme();
 
@@ -39,6 +47,7 @@ let recorder = null;
 let updates = null;
 let updateNotice = null;
 let updating = false;
+let history = null;
 
 function toggleRecording() {
   if (recorder.active) recorder.stop();
@@ -73,10 +82,40 @@ function state() {
     hotkeyStatus,
     version: app.getVersion(),
     update: updates ? updates.latest : null,
+    folders: { shots: folders.folder('shots'), videos: folders.folder('videos') },
+    platform: process.platform,
   };
 }
 
+function monitoringOn() {
+  return settings.get().monitoring !== false;
+}
+
+function openHistory() {
+  if (capture && capture.busy) capture.close();
+  history.open();
+}
+
+async function chooseFolder(kind) {
+  const result = await dialog.showOpenDialog(settingsWin || undefined, {
+    title: kind === 'shots' ? t('Escolher a pasta dos prints') : t('Escolher a pasta dos vídeos'),
+    defaultPath: folders.folder(kind),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || !result.filePaths[0]) return settings.get();
+  return applySettings({ [folders.KEYS[kind]]: result.filePaths[0] });
+}
+
 function setStartWithWindows(on) {
+  if (process.platform === 'linux') {
+    try {
+      setLinuxAutostart(on);
+    } catch {
+      settings.update({ startWithWindows: !on });
+      broadcast('settings', settings.get());
+    }
+    return;
+  }
   if (!app.isPackaged) {
     app.setLoginItemSettings({ openAtLogin: on });
     return;
@@ -99,6 +138,7 @@ function setStartWithWindows(on) {
 }
 
 function taskbarIsLight() {
+  if (!IS_WIN) return false;
   try {
     const out = execFileSync('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', '/v', 'SystemUsesLightTheme'], {
       encoding: 'utf8',
@@ -138,9 +178,18 @@ function applySettings(patch) {
     overlay.refreshVisibility();
   }
   if (patch.fpsEnabled !== undefined && patch.fpsEnabled !== before.fpsEnabled) {
-    if (next.fpsEnabled && lastSensors && !lastSensors.admin) startSensors(true);
-    else sensors.setFps(next.fpsEnabled);
+    if (next.fpsEnabled && monitoringOn() && lastSensors && !lastSensors.admin) startSensors(true);
+    else sensors.setFps(next.fpsEnabled && monitoringOn());
   }
+  if (patch.monitoring !== undefined && patch.monitoring !== before.monitoring) {
+    const on = monitoringOn();
+    sensors.setMonitoring(on);
+    if (on && next.fpsEnabled && lastSensors && !lastSensors.admin) startSensors(true);
+    else sensors.setFps(on && next.fpsEnabled);
+    overlay.refreshVisibility();
+  }
+  if (patch.captureWinShiftS !== undefined) sensors.setHook(!!next.captureWinShiftS);
+  if (patch.shotsFolder !== undefined || patch.videosFolder !== undefined) broadcast('state', state());
   if (patch.city !== undefined) weather.refresh();
   if (patch.hotkeys !== undefined) registerHotkeys();
   if (patch.theme !== undefined) applyTheme();
@@ -223,12 +272,18 @@ function toggleFps() {
 }
 
 function toggleVisible() {
+  if (!monitoringOn()) {
+    applySettings({ monitoring: true, hidden: false });
+    return;
+  }
   applySettings({ hidden: !settings.get().hidden });
 }
 
 function startSensors(elevated) {
   const s = settings.get();
-  sensors.start({ elevated, fps: s.fpsEnabled });
+  sensors.monitoring = monitoringOn();
+  sensors.hook = !!s.captureWinShiftS;
+  sensors.start({ elevated, fps: s.fpsEnabled && monitoringOn() });
 }
 
 function refreshTray() {
@@ -255,20 +310,29 @@ function refreshTray() {
       accelerator: hotkeys().record || undefined,
       click: toggleRecording,
     },
+    { label: t('Últimos prints'), accelerator: hotkeys().history || undefined, click: openHistory },
     { type: 'separator' },
-    { label: s.hidden ? t('Mostrar UltraGMonitor') : t('Esconder UltraGMonitor'), accelerator: hotkeys().visible || undefined, click: toggleVisible },
-    { label: s.locked ? t('Destravar pra mover') : t('Travar posição'), accelerator: hotkeys().lock || undefined, click: toggleLock },
-    { label: t('Medir FPS'), type: 'checkbox', checked: s.fpsEnabled, accelerator: hotkeys().fps || undefined, click: toggleFps },
-    { type: 'separator' },
-    { label: t('Visual'), submenu: [layoutItem('card', t('Card')), layoutItem('compact', t('Compacto')), layoutItem('bar', t('Barra')), layoutItem('dock', t('Dock (barra de tarefas)'))] },
-    { label: t('Fundo'), submenu: [1, 0.82, 0.6, 0.35, 0].map(opacityItem) },
-    {
-      label: t('Mover pro monitor'),
-      submenu: displayList().map((d) => ({ label: d.label, click: () => overlay.moveToDisplay(d.id) })),
-    },
+    { label: t('Monitoramento'), type: 'checkbox', checked: monitoringOn(), click: () => applySettings({ monitoring: !monitoringOn() }) },
+    ...(monitoringOn()
+      ? [
+          { label: s.hidden ? t('Mostrar UltraGMonitor') : t('Esconder UltraGMonitor'), accelerator: hotkeys().visible || undefined, click: toggleVisible },
+          { label: s.locked ? t('Destravar pra mover') : t('Travar posição'), accelerator: hotkeys().lock || undefined, click: toggleLock },
+          ...(IS_WIN ? [{ label: t('Medir FPS'), type: 'checkbox', checked: s.fpsEnabled, accelerator: hotkeys().fps || undefined, click: toggleFps }] : []),
+          { type: 'separator' },
+          {
+            label: t('Visual'),
+            submenu: [layoutItem('card', t('Card')), layoutItem('compact', t('Compacto')), layoutItem('bar', t('Barra')), ...(IS_WIN ? [layoutItem('dock', t('Dock (barra de tarefas)'))] : [])],
+          },
+          { label: t('Fundo'), submenu: [1, 0.82, 0.6, 0.35, 0].map(opacityItem) },
+          {
+            label: t('Mover pro monitor'),
+            submenu: displayList().map((d) => ({ label: d.label, click: () => overlay.moveToDisplay(d.id) })),
+          },
+        ]
+      : []),
     { type: 'separator' },
     { label: t('Configurações…'), click: openSettings },
-    { label: t('Reiniciar sensores como admin'), click: () => startSensors(true) },
+    ...(monitoringOn() && IS_WIN ? [{ label: t('Reiniciar sensores como admin'), click: () => startSensors(true) }] : []),
     { type: 'separator' },
     { label: t('Sair'), click: () => app.quit() },
   ]);
@@ -279,7 +343,7 @@ function refreshTray() {
 async function openUpdate() {
   const update = updates && updates.latest;
   if (!update || updating) return;
-  if (!app.isPackaged) {
+  if (!app.isPackaged || !IS_WIN) {
     shell.openExternal(update.url);
     return;
   }
@@ -318,8 +382,9 @@ function registerHotkeys() {
   const actions = {
     capture: () => capture.start(),
     record: toggleRecording,
+    history: openHistory,
     lock: toggleLock,
-    fps: toggleFps,
+    fps: IS_WIN ? toggleFps : null,
     visible: toggleVisible,
   };
   hotkeyStatus = {};
@@ -346,6 +411,17 @@ function registerIpc() {
   ipcMain.handle('overlay:move-to-display', (_e, id) => overlay.moveToDisplay(id));
   ipcMain.handle('open:pawnio', () => shell.openExternal(PAWNIO_URL));
   ipcMain.handle('open:update', openUpdate);
+  ipcMain.handle('folder:choose', (_e, kind) => (folders.KEYS[kind] ? chooseFolder(kind) : settings.get()));
+  ipcMain.handle('folder:open', (_e, kind) => (folders.KEYS[kind] ? shell.openPath(folders.ensure(kind)) : ''));
+  ipcMain.on('history:open', openHistory);
+  ipcMain.handle('history:list', () => history.list());
+  ipcMain.handle('history:copy', (_e, file) => history.copy(String(file)));
+  ipcMain.on('history:drag', (e, file) => history.drag(String(file), e.sender));
+  ipcMain.on('history:menu', (e, file) => history.menu(String(file), e.sender));
+  ipcMain.on('history:folder', (_e, kind) => {
+    if (folders.KEYS[kind]) history.openFolder(kind);
+  });
+  ipcMain.on('history:close', () => history.hide());
   ipcMain.handle('open:settings', () => openSettings());
   ipcMain.handle('dock:info', () => overlay.dockInfo(overlay.dockExtra));
   ipcMain.handle('background:choose', async () => {
@@ -387,11 +463,23 @@ function registerIpc() {
   });
 }
 
-app.on('second-instance', openSettings);
+function runCommand(argv) {
+  if (!capture) return false;
+  if (argv.includes('--capture')) capture.start();
+  else if (argv.includes('--record')) toggleRecording();
+  else if (argv.includes('--history')) openHistory();
+  else return false;
+  return true;
+}
+
+app.on('second-instance', (_e, argv) => {
+  if (!runCommand(argv)) openSettings();
+});
 
 app.whenReady().then(() => {
   if (!hasLock) return;
   settings.load();
+  if (!IS_WIN && settings.get().layout === 'dock') settings.update({ layout: settings.get().layoutBeforeDock || 'card' });
   if (app.isPackaged && settings.isFirstRun()) settings.update({ startWithWindows: true });
   if (!i18n.LANGS.includes(settings.get().language)) settings.update({ language: i18n.pick(app.getLocale()) });
   i18n.setLang(settings.get().language);
@@ -406,6 +494,19 @@ app.whenReady().then(() => {
     broadcast('sensors', data);
   });
   sensors.on('status', () => broadcast('state', state()));
+  sensors.on('key', (name) => {
+    if (name === 'capture' && settings.get().captureWinShiftS) capture.start();
+  });
+  if (process.argv.includes('--smoke-test')) {
+    let readings = 0;
+    sensors.on('data', (data) => {
+      readings += 1;
+      if (readings < 2) return;
+      process.stdout.write(`${JSON.stringify({ platform: process.platform, cpu: data.cpu, gpu: data.gpu, ram: data.ram, disks: (data.disks || []).map((d) => d.name) })}\n`);
+      app.exit(0);
+    });
+    setTimeout(() => app.exit(1), 30000);
+  }
   sensors.on('log', (msg) => console.log(msg));
 
   weather = new Weather(() => settings.get().city);
@@ -433,11 +534,12 @@ app.whenReady().then(() => {
     },
     afterShot: () => overlay.refreshVisibility(),
   });
+  history = new History({ toast, getSettings: () => settings.get(), pinFile: (file) => capture.pinFile(file) });
   setTimeout(() => capture.warm(), 1500);
   createTray();
   registerHotkeys();
 
-  startSensors(s.adminSensors || s.fpsEnabled);
+  startSensors(s.adminSensors || (s.fpsEnabled && monitoringOn()));
   weather.start();
   updates = new Updates(app.getVersion(), () => settings.get().updateCheck !== false);
   updates.on('update', onUpdate);
@@ -452,7 +554,8 @@ app.whenReady().then(() => {
     broadcast('state', state());
   });
 
-  if (settings.isFirstRun() && !process.argv.includes('--autostart')) openSettings();
+  if (['--capture', '--record', '--history'].some((flag) => process.argv.includes(flag))) setTimeout(() => runCommand(process.argv), 1500);
+  else if (settings.isFirstRun() && !process.argv.includes('--autostart')) openSettings();
 });
 
 app.on('window-all-closed', () => {});

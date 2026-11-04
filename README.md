@@ -13,6 +13,7 @@
 
 <p align="center">
   <img alt="Windows 10 e 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white" />
+  <img alt="Linux beta" src="https://img.shields.io/badge/Linux-beta-FCC624?logo=linux&logoColor=black" />
   <img alt="Licença GPL-3.0" src="https://img.shields.io/badge/licen%C3%A7a-GPL--3.0-blue" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-45-47848F?logo=electron&logoColor=white" />
   <img alt=".NET" src="https://img.shields.io/badge/.NET%20Framework-4.7.2-512BD4?logo=dotnet&logoColor=white" />
@@ -108,7 +109,11 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 - Abre com um atalho (**Print Screen** por padrão). É só arrastar pra escolher a área e ajustar pelas bordas.
 - **10 ferramentas:** lápis, linha, seta, retângulo, retângulo cheio, círculo, marcador, texto, desfoque (pra esconder senha, chave e dado pessoal) e numeração de passos.
 - 5 cores e espessura ajustável, com desfazer e refazer.
-- **Copiar** com `Ctrl+C`, **salvar** com `Ctrl+S` (PNG em `Imagens\UltraGMonitor`) ou **fixar na tela**, como uma janelinha que fica por cima de tudo.
+- **Copiar** com `Ctrl+C`, **salvar** com `Ctrl+S` ou **fixar na tela**, como uma janelinha que fica por cima de tudo.
+- Todo print copiado também vira um arquivo PNG na pasta de prints, pra você achar depois.
+- **Últimos prints:** uma janelinha com os prints e vídeos mais recentes. Clique pra copiar de novo, arraste pra soltar direto no chat ou no e-mail, ou use o botão direito pra fixar, abrir, mostrar na pasta ou mandar pra lixeira.
+- No Windows, dá pra usar o **`Win+Shift+S`** pra abrir a captura do UltraGMonitor no lugar da Ferramenta de Captura (opcional, na aba Atalhos).
+- Por padrão, prints e vídeos vão pra `Imagens\UltraGMonitor`, em `Prints` e `Vídeos`. Dá pra trocar cada pasta na aba Captura.
 
 ### Gravação de vídeo
 
@@ -116,7 +121,7 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 
 - Escolha a área e grave com o **som do PC** e o **microfone**, ligando e desligando cada um na hora.
 - Uma barra flutuante mostra o tempo e deixa pausar, continuar e parar.
-- O vídeo vai pra `Vídeos\UltraGMonitor` em MP4 e **já fica copiado**: é só dar `Ctrl+V` no chat, no e-mail ou na issue.
+- O vídeo vai pra pasta de vídeos em MP4 e **já fica copiado**: é só dar `Ctrl+V` no chat, no e-mail ou na issue.
 
 ### Personalização
 
@@ -128,6 +133,7 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 - **Fundo animado** com GIF, WebP, imagem ou vídeo (no Card e no Compacto).
 - Cada estilo guarda o próprio tamanho.
 - Você escolhe o que aparece: relógio, data, clima, FPS, CPU, GPU, RAM e SSD.
+- Quer só a captura? Desligue o **Monitoramento**: o widget some e o app fica quietinho na bandeja, só com captura e gravação.
 
 ### Feito pra ficar por cima do jogo
 
@@ -169,6 +175,31 @@ Quando sai uma versão nova, o UltraGMonitor avisa com uma notificação do Wind
 
 O FPS e as temperaturas da CPU e do SSD precisam de admin. O app só pede quando você liga o FPS ou marca **Pedir admin ao abrir**, na aba Sistema. Sem admin, todo o resto funciona normalmente.
 
+### Linux (beta)
+
+Na página [Releases](../../releases) tem duas opções pra Linux, 64 bits:
+
+- **`.deb`** pra Ubuntu, Linux Mint, Pop!_OS e outros derivados do Debian:
+  ```bash
+  sudo apt install ./UltraGMonitor-linux-amd64.deb
+  ```
+- **`.AppImage`** pra qualquer distribuição: dê permissão de execução e abra. No Ubuntu 24.04 ou mais novo, prefira o `.deb`, porque o sistema bloqueia o AppImage de apps Electron.
+
+O que funciona no Linux: CPU (uso, clock, temperatura e consumo quando o sistema libera), GPU NVIDIA (com o driver da NVIDIA instalado) e AMD, RAM, discos, relógio, clima, captura de tela, últimos prints e gravação de vídeo. Nada disso precisa de driver extra.
+
+O que ainda não tem:
+
+- **FPS:** o PresentMon só existe no Windows. Está nos planos.
+- **Dock na barra de tarefas** e **`Win+Shift+S`**: são coisas do Windows.
+- **Som do PC na gravação:** pode não funcionar em todas as distribuições. O microfone funciona.
+
+Funciona melhor em sessões **X11**, como o padrão do Linux Mint. No **Wayland**, como o padrão do Ubuntu:
+
+- os atalhos do app só funcionam com ele em foco. Crie um atalho do sistema em Configurações → Teclado → Atalhos personalizados com o comando `ultragmonitor --capture`. Também valem `--record` e `--history`;
+- se a `Print Screen` já for do sistema, troque o atalho do app ou desligue o do sistema.
+
+No GNOME, o ícone na bandeja precisa da extensão **AppIndicator**, que já vem no Ubuntu.
+
 ## Atalhos
 
 Todos podem ser trocados na aba **Atalhos**.
@@ -177,6 +208,7 @@ Todos podem ser trocados na aba **Atalhos**.
 |---|---|
 | `Print Screen` | Abrir a captura de tela |
 | sem atalho | Gravar vídeo (defina o seu, ou use o botão de vídeo na captura) |
+| sem atalho | Abrir os últimos prints (defina o seu, ou use a bandeja ou o botão na captura) |
 | `Ctrl+Shift+H` | Destravar e travar o widget pra mover, redimensionar e trocar o estilo |
 | `Ctrl+Shift+F` | Ligar e desligar o FPS |
 | `Ctrl+Shift+O` | Mostrar e esconder o widget |
@@ -214,14 +246,15 @@ flowchart LR
 - **Electron** cuida das janelas, do visual, das configurações, da captura e da gravação.
 - Um **ajudante em C#** (`sensor/`) lê os sensores com a LibreHardwareMonitorLib, os contadores de CPU e de disco do Windows, o FPS pelo PresentMon e tira o print da tela. Ele manda tudo pro Electron por um named pipe, uma linha de JSON por leitura.
 - O ajudante só roda como admin quando precisa: pra ler o FPS e as temperaturas.
+- No **Linux**, não tem ajudante: o próprio app lê o `/proc` e o `/sys` do sistema e, se tiver placa NVIDIA, o `nvidia-smi`.
 
 ### Estrutura do projeto
 
 ```
-src/main/        processo principal: janelas, bandeja, atalhos, captura, gravação e clima
+src/main/        processo principal: janelas, bandeja, atalhos, captura, gravação, clima e os sensores do Linux
 src/preload/     ponte segura entre as telas e o processo principal
-src/renderer/    as telas: widget, configurações, captura, gravação e avisos
-sensor/          ajudante em C# que lê os sensores, o FPS e tira o print
+src/renderer/    as telas: widget, configurações, captura, gravação, últimos prints e avisos
+sensor/          ajudante em C# que lê os sensores, o FPS e tira o print no Windows
 scripts/         baixar dependências, compilar o ajudante, gerar ícones e o instalador
 resources/       PresentMon, PawnIO e scripts do instalador
 assets/          logo e ícones
@@ -239,13 +272,15 @@ npm start
 
 O `npm run setup` baixa o PresentMon e o PawnIO e compila o ajudante em C#.
 
+No Linux, basta o Node.js: rode `npm install` e `npm start`. Lá os sensores são lidos direto pelo app, sem o ajudante em C#.
+
 Pra gerar o instalador:
 
 ```bash
 npm run dist
 ```
 
-O instalador sai em `dist/`. Pra regenerar os ícones depois de mexer em `assets/logo.svg` ou `assets/logo-mark.svg`, rode `npm run icons`.
+No Windows sai o instalador `.exe`; no Linux, o `.AppImage` e o `.deb`. Tudo vai pra `dist/`. Pra regenerar os ícones depois de mexer em `assets/logo.svg` ou `assets/logo-mark.svg`, rode `npm run icons`.
 
 ### Publicando uma versão
 

@@ -642,6 +642,33 @@ input[type='search'] {
   gap: 0.5rem;
 }
 
+body:not([data-platform='linux']) .linux-only,
+body[data-platform='linux'] .win-only {
+  display: none !important;
+}
+
+body[data-platform='linux'] #layout {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.folder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.folder + .folder {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+}
+
+.folder-path {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
 .btn {
   height: 34px;
   padding: 0 0.9rem;

@@ -1,7 +1,7 @@
 {
   "name": "ultragmonitor",
   "productName": "UltraGMonitor",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Monitor de CPU, GPU, RAM, SSD, FPS, relógio e clima que fica num canto da tela",
   "author": "Paulo Azevedo",
   "license": "GPL-3.0-only",
@@ -51,27 +51,44 @@
       "node_modules/@fontsource-variable/**/*",
       "node_modules/@fontsource/**/*"
     ],
-    "extraResources": [
-      {
-        "from": "sensor/out",
-        "to": "sensor"
-      },
-      {
-        "from": "resources/presentmon",
-        "to": "presentmon"
-      },
-      {
-        "from": "resources/pawnio",
-        "to": "pawnio"
-      },
-      {
-        "from": "resources/setup",
-        "to": "setup"
-      }
-    ],
     "win": {
       "icon": "assets/icon.ico",
-      "target": "nsis"
+      "target": "nsis",
+      "extraResources": [
+        {
+          "from": "sensor/out",
+          "to": "sensor"
+        },
+        {
+          "from": "resources/presentmon",
+          "to": "presentmon"
+        },
+        {
+          "from": "resources/pawnio",
+          "to": "pawnio"
+        },
+        {
+          "from": "resources/setup",
+          "to": "setup"
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "executableName": "ultragmonitor",
+      "maintainer": "Paulo Azevedo",
+      "synopsis": "Monitor de hardware, relógio, clima, captura de tela e gravação de vídeo",
+      "artifactName": "${productName}-linux-${arch}.${ext}",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "UltraGMonitor"
+        }
+      }
     },
     "nsis": {
       "oneClick": false,
