@@ -7,6 +7,30 @@ namespace HudSensor
 {
     internal static class Native
     {
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct MemoryStatus
+        {
+            public uint Length;
+            public uint Load;
+            public ulong TotalPhysical;
+            public ulong AvailablePhysical;
+            public ulong TotalPageFile;
+            public ulong AvailablePageFile;
+            public ulong TotalVirtual;
+            public ulong AvailableVirtual;
+            public ulong AvailableExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
+
+        internal static bool ReadPhysicalMemory(out MemoryStatus status)
+        {
+            status = new MemoryStatus { Length = (uint)Marshal.SizeOf(typeof(MemoryStatus)) };
+            return GlobalMemoryStatusEx(ref status);
+        }
+
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 

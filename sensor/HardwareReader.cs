@@ -125,18 +125,17 @@ namespace HudSensor
 
         private void WriteMemory(JsonWriter json)
         {
-            var memory = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.Memory && Find(h, SensorType.Data, "Memory Used") != null);
-            if (memory == null)
+            if (!Native.ReadPhysicalMemory(out var memory) || memory.TotalPhysical == 0)
             {
                 json.Null("ram");
                 return;
             }
-            var used = Find(memory, SensorType.Data, "Memory Used");
-            var available = Find(memory, SensorType.Data, "Memory Available");
+            const double gigabyte = 1024d * 1024 * 1024;
+            var used = memory.TotalPhysical - memory.AvailablePhysical;
             json.BeginObject("ram")
-                .Prop("used", used, 2)
-                .Prop("total", used + available, 2)
-                .Prop("load", Find(memory, SensorType.Load, "Memory"))
+                .Prop("used", used / gigabyte, 2)
+                .Prop("total", memory.TotalPhysical / gigabyte, 2)
+                .Prop("load", used * 100d / memory.TotalPhysical)
                 .EndObject();
         }
 
