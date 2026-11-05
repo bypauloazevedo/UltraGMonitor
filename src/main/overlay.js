@@ -74,8 +74,8 @@ class Overlay {
       this.refreshVisibility();
     });
     win.on('moved', () => this.onMoved());
-    this.timers.push(setInterval(() => this.keepOnTop(), 500));
-    this.timers.push(setInterval(() => this.tickPointer(), 100));
+    win.on('show', () => this.setActivity(true));
+    win.on('hide', () => this.setActivity(false));
     win.on('closed', () => {
       this.timers.forEach(clearInterval);
       this.win = null;
@@ -91,6 +91,14 @@ class Overlay {
 
   alive() {
     return this.win && !this.win.isDestroyed();
+  }
+
+  setActivity(active) {
+    this.timers.forEach(clearInterval);
+    this.timers = [];
+    if (!active) return;
+    this.timers.push(setInterval(() => this.keepOnTop(), 500));
+    this.timers.push(setInterval(() => this.tickPointer(), 100));
   }
 
   isDock() {

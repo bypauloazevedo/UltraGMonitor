@@ -1,8 +1,8 @@
 :root {
   --clear: calc(1 - var(--bg-alpha));
-  --fg-alpha: calc(1 - var(--clear) * 0.5);
-  --muted: color-mix(in srgb, #eef2f7 calc(var(--clear) * 60%), #aeb7c4);
-  --dim: color-mix(in srgb, #d5dce6 calc(var(--clear) * 60%), #7d8796);
+  --fg-alpha: calc(1 - var(--clear) * 0.15);
+  --muted: color-mix(in srgb, #eef2f7 calc(var(--clear) * 60%), #bdc6d4);
+  --dim: color-mix(in srgb, #e0e6ef calc(var(--clear) * 60%), #a4afbf);
   --panel: rgba(255, 255, 255, calc(0.045 * var(--bg-alpha)));
   --media-alpha: 0.6;
   --clock-font: var(--font);
@@ -47,8 +47,7 @@ body {
   text-shadow:
     0 0 1px rgba(0, 0, 0, calc(0.95 * var(--clear))),
     0 0 2px rgba(0, 0, 0, calc(0.9 * var(--clear))),
-    0 1px 3px rgba(0, 0, 0, calc(0.9 * var(--clear))),
-    0 0 0.6rem rgba(0, 0, 0, calc(0.5 * var(--clear)));
+    0 1px 2px rgba(0, 0, 0, calc(0.9 * var(--clear)));
 }
 
 #hud .ico svg {
@@ -426,11 +425,13 @@ body.peek #hud {
 
 .meter > i {
   display: block;
-  width: 0;
+  width: 100%;
   height: 100%;
   border-radius: inherit;
   background: var(--tone, var(--accent));
-  transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.3s;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.3s;
 }
 
 .tile-extra {
@@ -440,7 +441,7 @@ body.peek #hud {
   gap: 0.5em;
   margin-top: 0.5em;
   min-height: 1.3em;
-  font-size: 0.84em;
+  font-size: 0.88em;
   font-weight: 500;
   color: var(--muted);
   white-space: nowrap;
@@ -989,6 +990,8 @@ body.handle-on .handle {
 }
 
 .toolbar {
+  -webkit-app-region: no-drag;
+  cursor: default;
   width: 0;
   min-width: 100%;
   display: flex;
@@ -1216,11 +1219,12 @@ body.editing .mini.bar.grip-r {
 }
 
 body.editing #hud {
-  -webkit-app-region: drag;
-  cursor: move;
+  cursor: default;
 }
 
 body.editing .surface {
+  -webkit-app-region: drag;
+  cursor: move;
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
@@ -1255,4 +1259,59 @@ body.editing .grip {
 
 .dock.light .dk-second {
   color: #3d4552;
+}
+
+.sensor-health {
+  display: grid;
+  gap: 0.45rem;
+  max-width: 26rem;
+  color: #d5deeb;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: normal;
+  -webkit-app-region: no-drag;
+  cursor: default;
+}
+
+.sensor-health button {
+  justify-self: start;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  background: #1a1e27;
+  color: #eef2f7;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+body.preview #hud {
+  position: relative;
+  padding: 0;
+  pointer-events: none;
+}
+
+body.preview {
+  background: #17202c;
+}
+
+body.preview .handle,
+body.preview .grip,
+body.preview .dk-tools {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html,
+  #hud,
+  .meter > i,
+  .is-fps {
+    transition: none;
+    animation: none;
+  }
 }

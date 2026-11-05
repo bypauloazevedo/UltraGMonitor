@@ -1,6 +1,7 @@
-const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
+const storage = require('./atomic-json');
+const { sanitize } = require('./settings-validation');
 
 const DEFAULTS = {
   language: null,
@@ -69,6 +70,8 @@ let current = null;
 let file = null;
 let firstRun = false;
 let saveTimer = null;
+let persistence = { recovered: false, error: false };
+let onPersistence = () => {};
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -84,24 +87,26 @@ function merge(base, extra) {
 
 function load() {
   file = path.join(app.getPath('userData'), 'settings.json');
-  try {
-    current = merge(DEFAULTS, JSON.parse(fs.readFileSync(file, 'utf8')));
-  } catch {
-    current = merge(DEFAULTS, {});
-    firstRun = true;
-  }
+  const result = storage.read(file);
+  current = merge(DEFAULTS, sanitize(result.value));
+  firstRun = !!result.fresh;
+  persistence = { recovered: result.recovered, error: false };
   return current;
 }
 
 function flush() {
   clearTimeout(saveTimer);
   saveTimer = null;
+  if (!current || !file) return;
+  const before = persistence.error;
   try {
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(current, null, 2));
+    storage.write(file, current);
+    persistence.error = false;
   } catch (err) {
     console.error('falha ao salvar configurações', err);
+    persistence.error = true;
   }
+  if (before !== persistence.error) onPersistence();
 }
 
 function withLayoutScale(partial) {
@@ -118,7 +123,9 @@ function withLayoutScale(partial) {
 }
 
 function update(partial) {
-  current = merge(current, withLayoutScale(partial));
+  const patch = sanitize(partial);
+  if (!Object.keys(patch).length) return current;
+  current = merge(current, withLayoutScale(patch));
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flush, 300);
   return current;
@@ -130,4 +137,7 @@ module.exports = {
   flush,
   get: () => current,
   isFirstRun: () => firstRun,
+  persistence: () => ({ ...persistence }),
+  onPersistence: (callback) => { onPersistence = callback; },
+  sanitize,
 };

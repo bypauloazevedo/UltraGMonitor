@@ -17,6 +17,55 @@ const $ = (id) => document.getElementById(id);
 let settings = null;
 let appState = null;
 let sensors = null;
+let allFonts = false;
+let previewFrame = null;
+let previewSize = { width: 400, height: 300 };
+
+function updatePreview() {
+  if (!previewFrame) return;
+  previewFrame.contentWindow.postMessage({
+    type: 'preview:update', visible: activeTab === 'aparencia',
+    settings: { ...settings, locked: true, hidden: false },
+    sensors, state: appState, weather: previewWeather,
+  }, '*');
+}
+
+let previewWeather = null;
+
+function fitWidgetPreview() {
+  const holder = $('widget-preview');
+  if (!previewFrame || !holder.clientWidth) return;
+  const scale = Math.min(1, holder.clientWidth / previewSize.width, 360 / previewSize.height);
+  previewFrame.style.width = `${previewSize.width}px`;
+  previewFrame.style.height = `${previewSize.height}px`;
+  previewFrame.style.transform = `scale(${scale})`;
+  holder.style.height = `${Math.ceil(previewSize.height * scale)}px`;
+}
+
+function initPreview() {
+  const holder = $('widget-preview');
+  window.addEventListener('message', (event) => {
+    if (!previewFrame || event.source !== previewFrame.contentWindow || !event.data) return;
+    if (event.data.type === 'preview:ready') updatePreview();
+    if (event.data.type === 'preview:size' && Number.isFinite(event.data.width) && Number.isFinite(event.data.height)) {
+      previewSize = { width: Math.max(1, event.data.width), height: Math.max(1, event.data.height) };
+      fitWidgetPreview();
+      scheduleLayout();
+    }
+  });
+  let previewFitFrame = 0;
+  new ResizeObserver(() => {
+    if (!previewFitFrame) previewFitFrame = requestAnimationFrame(() => { previewFitFrame = 0; fitWidgetPreview(); });
+  }).observe(holder);
+}
+
+function ensurePreview() {
+  if (activeTab !== 'aparencia' || previewFrame) return;
+  previewFrame = document.createElement('iframe');
+  previewFrame.title = t('Prévia do widget');
+  previewFrame.src = '../overlay/index.html?preview=1';
+  $('widget-preview').appendChild(previewFrame);
+}
 
 function save(patch) {
   return window.hud.setSettings(patch);
@@ -44,7 +93,11 @@ function setRange(id, value, label) {
 }
 
 function markSegmented(id, value) {
-  for (const btn of $(id).querySelectorAll('button')) btn.classList.toggle('on', btn.dataset.value === value);
+  for (const btn of $(id).querySelectorAll('button')) {
+    const selected = btn.dataset.value === value;
+    btn.classList.toggle('on', selected);
+    btn.setAttribute('aria-pressed', String(selected));
+  }
 }
 
 function renderVisual() {
@@ -90,7 +143,8 @@ function fitPreviews() {
 }
 
 function fitPreviewsWhenLoaded() {
-  const loads = fonts.list.map((f) => document.fonts.load(`13px ${f.family}`, 'UltraGMonitor').catch(() => null));
+  const shown = [...document.querySelectorAll('.font-grid button:not([hidden])')].map((btn) => btn.dataset.font);
+  const loads = fonts.list.filter((f) => shown.includes(f.id)).map((f) => document.fonts.load(`13px ${f.family}`, '23:45 78% 52°').catch(() => null));
   Promise.all(loads).then(() => requestAnimationFrame(fitPreviews));
 }
 
@@ -102,10 +156,13 @@ function fontGrid(id, part, group) {
       btn.dataset.font = f.id;
       btn.title = f.label;
       const sample = document.createElement('span');
-      sample.textContent = 'UltraGMonitor';
+      sample.textContent = part === 'clock' ? '23:45' : '78% · 52°';
       sample.style.fontFamily = fonts.stack(f.id);
       sample.style.fontWeight = Math.max(450, f.weight);
       btn.appendChild(sample);
+      const caption = document.createElement('small');
+      caption.textContent = f.label;
+      btn.appendChild(caption);
       btn.addEventListener('click', () => {
         const patch = { font: f.id };
         if (part === 'clock') patch.weight = f.weight;
@@ -115,11 +172,18 @@ function fontGrid(id, part, group) {
     }
   }
   const current = settings.typography[part].font;
-  for (const btn of grid.children) btn.classList.toggle('on', btn.dataset.font === current);
+  const common = ['geist', 'geist-mono', 'outfit', 'space-grotesk', 'orbitron', 'rajdhani'];
+  for (const btn of grid.children) {
+    const selected = btn.dataset.font === current;
+    btn.classList.toggle('on', selected);
+    btn.setAttribute('aria-pressed', String(selected));
+    btn.hidden = !allFonts && !selected && !common.includes(btn.dataset.font);
+  }
   $(`${id}-out`).textContent = fonts.byId(current).label;
 }
 
 function renderTypography() {
+  $('fonts-more').textContent = t(allFonts ? 'Mostrar menos fontes' : 'Ver todas as fontes');
   fontGrid('fonts-display', 'clock', 'display');
   fontGrid('fonts-metrics', 'metrics', 'metrics');
   for (const part of ['clock', 'date', 'weather', 'metrics']) {
@@ -304,12 +368,15 @@ function renderFolders() {
 function renderStatus() {
   const list = $('status');
   list.innerHTML = '';
+  if (appState && appState.persistence && appState.persistence.error) list.appendChild(statusItem('warn', 'Não deu pra salvar as configurações', 'Seus ajustes estão ativos nesta sessão. Confira o acesso à pasta de dados.'));
+  if (appState && appState.persistence && appState.persistence.recovered) list.appendChild(statusItem('warn', 'Configurações recuperadas', 'O arquivo anterior estava inválido. Usamos a cópia de segurança quando disponível.'));
   const st = (appState && appState.sensor) || {};
   if (st.missing) {
     list.appendChild(statusItem('warn', 'Ajudante de sensores não encontrado', 'Rode "npm run setup" pra compilar'));
     return;
   }
   list.appendChild(statusItem(st.running ? 'ok' : 'warn', st.running ? 'Lendo sensores' : 'Sensores parados'));
+  if (st.starting) list.appendChild(statusItem('warn', 'Carregando sensores…', 'Aguardando a conexão com o ajudante de sensores.'));
   if (isLinux()) {
     list.appendChild(statusItem('warn', 'FPS ainda não funciona no Linux', 'CPU, GPU, RAM, disco, relógio, clima, captura e gravação funcionam normal.'));
     return;
@@ -508,6 +575,8 @@ function renderAll() {
   renderFolders();
   renderLock();
   renderHotkeys();
+  ensurePreview();
+  updatePreview();
   scheduleLayout();
 }
 
@@ -536,6 +605,8 @@ function setTab(tab) {
   renderTabs();
   window.scrollTo(0, 0);
   layoutColumns();
+  ensurePreview();
+  updatePreview();
 }
 
 function renderTabs() {
@@ -612,6 +683,14 @@ function scheduleLayout() {
 }
 
 function bind() {
+  initPreview();
+  for (const input of document.querySelectorAll('input[id], select[id]')) {
+    const label = input.closest('.field')?.querySelector('.label');
+    if (label && !input.labels.length) {
+      label.id = label.id || `${input.id}-label`;
+      input.setAttribute('aria-labelledby', label.id);
+    }
+  }
   renderTabs();
   $('tabs').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
@@ -675,6 +754,14 @@ function bind() {
   }
   $('bg-choose').addEventListener('click', () => window.hud.chooseBackground());
   $('bg-clear').addEventListener('click', () => window.hud.clearBackground());
+  $('fonts-more').addEventListener('click', () => {
+    allFonts = !allFonts;
+    $('fonts-more').textContent = t(allFonts ? 'Mostrar menos fontes' : 'Ver todas as fontes');
+    $('fonts-more').setAttribute('aria-expanded', String(allFonts));
+    renderTypography();
+    fitPreviewsWhenLoaded();
+    scheduleLayout();
+  });
   for (const id of ['clock24h', 'showSeconds', 'adminSensors', 'startWithWindows', 'hoverFade', 'captureCloseOnCopy', 'recordSystemAudio', 'recordMic', 'updateCheck', 'monitoring', 'autoSaveShots', 'captureWinShiftS']) {
     $(id).addEventListener('change', (e) => save({ [id]: e.target.checked }));
   }
@@ -729,6 +816,7 @@ async function init() {
   settings = await window.hud.getSettings();
   appState = await window.hud.getState();
   sensors = await window.hud.lastSensors();
+  previewWeather = await window.hud.lastWeather();
   bind();
   i18n.setLang(settings.language);
   i18n.apply();
@@ -749,10 +837,12 @@ async function init() {
     renderDisplays();
     renderHotkeys();
     scheduleLayout();
+    updatePreview();
   });
   window.hud.onSensors((data) => {
     const statusChanged = !sensors || sensors.admin !== data.admin || sensors.pawnio !== data.pawnio;
     sensors = data;
+    updatePreview();
     renderDisks();
     renderHardwareNames();
     if (statusChanged) {
@@ -760,7 +850,14 @@ async function init() {
       scheduleLayout();
     }
   });
+  window.hud.onWeather((data) => { previewWeather = data; updatePreview(); });
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'hidden') return;
+    [sensors, appState, previewWeather] = await Promise.all([window.hud.lastSensors(), window.hud.getState(), window.hud.lastWeather()]);
+    renderAll();
+  });
   fitPreviewsWhenLoaded();
+  window.hud.settingsReady();
 }
 
 init();

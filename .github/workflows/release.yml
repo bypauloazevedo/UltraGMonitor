@@ -26,6 +26,12 @@ jobs:
 
       - run: npm ci
 
+      - run: npm run build:sensor
+
+      - run: npm test
+
+      - run: npm run test:ui
+
       - run: npm run dist
 
       - name: Testar o instalador silencioso
@@ -37,6 +43,10 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "instalador saiu com $($install.ExitCode)" }
           $exe = Join-Path $env:ProgramFiles 'UltraGMonitor\UltraGMonitor.exe'
           if (-not (Test-Path $exe)) { throw "app não foi instalado em $exe" }
+          $ocr = Join-Path $env:ProgramFiles 'UltraGMonitor\resources\ocr'
+          foreach ($file in @('worker.cjs', 'ocr-image.js', 'ocr-result.js', 'languages\por.traineddata.gz', 'languages\eng.traineddata.gz', 'languages\spa.traineddata.gz', 'node_modules\pngjs\lib\png.js', 'node_modules\tesseract.js\src\index.js')) {
+            if (-not (Test-Path (Join-Path $ocr $file))) { throw "arquivo de reconhecimento ausente no instalador: $file" }
+          }
           $key = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\d5be0f81-9cb9-5e10-a442-364ab38f49a9'
           Write-Host "ProductCode ok: $($key.DisplayName) $($key.DisplayVersion)"
           if (-not (Get-ScheduledTask -TaskName UltraGMonitor -ErrorAction SilentlyContinue)) { throw 'tarefa de abrir com o Windows não foi criada' }
@@ -47,12 +57,6 @@ jobs:
         with:
           name: UltraGMonitor-Setup
           path: dist/*.exe
-
-      - if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$env:GITHUB_REF_NAME" (Get-ChildItem dist/*.exe).FullName --title "UltraGMonitor $env:GITHUB_REF_NAME" --generate-notes
 
   linux:
     runs-on: ubuntu-latest
@@ -66,11 +70,14 @@ jobs:
 
       - run: npm ci
 
+      - run: npm test
+
       - name: Testar os sensores no Linux
         timeout-minutes: 5
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb > /dev/null
+          xvfb-run -a npm run test:ui
           xvfb-run -a npx electron . --no-sandbox --smoke-test | tee smoke.txt
           grep -q '"platform":"linux"' smoke.txt
           grep -q '"cpu":{"name"' smoke.txt
@@ -82,22 +89,32 @@ jobs:
           name: UltraGMonitor-Linux
           path: dist/*
 
-  linux-release:
+  publicar:
     needs: [build, linux]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - uses: actions/download-artifact@v4
         with:
-          name: UltraGMonitor-Linux
+          pattern: UltraGMonitor-*
+          merge-multiple: true
           path: dist
+
+      - name: Gerar notas a partir do changelog
+        run: node scripts/release-notes.js "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
 
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY"
+        run: gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "UltraGMonitor $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
 
   winget:
-    needs: build
+    needs: publicar
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: windows-latest
     permissions:

@@ -19,8 +19,27 @@
     <div id="bar" hidden></div>
     <div id="tip" hidden></div>
     <textarea id="text" hidden spellcheck="false"></textarea>
+    <section id="ocr-panel" class="ocr-panel" role="dialog" aria-labelledby="ocr-title" aria-describedby="ocr-advice" hidden>
+      <header class="ocr-header">
+        <div><h1 id="ocr-title">Texto da imagem</h1><p>Reconhecido neste computador</p></div>
+        <button type="button" id="ocr-close" class="ocr-close" aria-label="Voltar à captura" title="Voltar à captura"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
+      </header>
+      <p id="ocr-advice" class="ocr-advice">Confira antes de copiar. Letras pequenas, imagens borradas e fundos com pouco contraste podem causar erros no reconhecimento.</p>
+      <div class="ocr-progress" id="ocr-progress"><progress id="ocr-meter" max="1" value="0"></progress></div>
+      <p id="ocr-status" class="ocr-status" role="status" aria-live="polite"></p>
+      <label class="ocr-label" for="ocr-result" id="ocr-label" hidden>Revise ou edite o texto</label>
+      <textarea id="ocr-result" class="ocr-result" spellcheck="false" hidden aria-describedby="ocr-advice"></textarea>
+      <details class="ocr-source" id="ocr-source"><summary>Ver imagem selecionada</summary><img id="ocr-image" alt="Área selecionada para reconhecer o texto" /></details>
+      <footer class="ocr-actions">
+        <button type="button" id="ocr-back">Voltar à captura</button>
+        <button type="button" id="ocr-retry" hidden>Tentar novamente</button>
+        <button type="button" id="ocr-copy" class="ocr-primary" disabled>Copiar texto</button>
+      </footer>
+    </section>
     <script src="../shared/i18n.js"></script>
     <script src="../shared/theme.js"></script>
+    <script src="../shared/capture-geometry.js"></script>
+    <script src="ocr.js"></script>
     <script src="capture.js"></script>
   </body>
 </html>

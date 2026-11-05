@@ -34,6 +34,7 @@ const ICONS = {
   mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>',
   micOff: '<path d="m2 2 20 20"/><path d="M18.9 13.2A7 7 0 0 0 19 12v-2M5 10v2a7 7 0 0 0 12 5M15 9.3V5a3 3 0 0 0-5.7-1.3M9 9v3a3 3 0 0 0 5.1 2.1M12 19v3"/>',
   record: '<circle cx="12" cy="12" r="6" fill="currentColor" stroke="none"/>',
+  ocr: '<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3M7 8h10M12 8v9M9 17h6"/>',
 };
 
 const TOOLS = [
@@ -65,6 +66,10 @@ let editing = null;
 let frame = 0;
 let mode = 'shot';
 let audio = { system: true, mic: false };
+const ocr = new window.CaptureOcr({
+  exportImage: () => exportPng(),
+  onVisibility: () => { hideTip(); schedule(); },
+});
 
 const svg = (name) => `<svg viewBox="0 0 24 24">${ICONS[name]}</svg>`;
 const AUDIO = {
@@ -188,13 +193,24 @@ function render() {
 }
 
 function layout() {
-  const hasSel = sel && sel.w > 2 && sel.h > 2;
+  const hasSel = !!sel && sel.w > 2 && sel.h > 2;
   selBox.hidden = !hasSel;
   sizeLabel.hidden = !hasSel;
   hint.hidden = !!hasSel;
-  bar.hidden = !hasSel || (drag && drag.kind === 'new');
+  bar.hidden = ocr.opened || !!(drag && drag.kind === 'new');
+  for (const button of bar.querySelectorAll('[data-act="copy"], [data-act="save"], [data-act="pin"], [data-act="ocr"], [data-act="record"]')) button.disabled = !hasSel;
+  const undo = bar.querySelector('[data-act="undo"]');
+  const redo = bar.querySelector('[data-act="redo"]');
+  if (undo) undo.disabled = !shapes.length;
+  if (redo) redo.disabled = !undone.length;
   if (bar.hidden) hideTip();
-  if (!hasSel) return;
+  if (!hasSel) {
+    if (!bar.hidden) {
+      bar.style.left = `${Math.max(8, (window.innerWidth - bar.offsetWidth) / 2)}px`;
+      bar.style.top = `${Math.max(8, window.innerHeight - bar.offsetHeight - 24)}px`;
+    }
+    return;
+  }
   const css = { x: sel.x / ratio, y: sel.y / ratio, w: sel.w / ratio, h: sel.h / ratio };
   Object.assign(selBox.style, { left: `${css.x}px`, top: `${css.y}px`, width: `${css.w}px`, height: `${css.h}px` });
   selBox.classList.toggle('drawing', mode === 'shot' && (!!tool || shapes.length > 0));
@@ -207,13 +223,10 @@ function layout() {
   let top = css.y + css.h + 12;
   if (top + bh > window.innerHeight - 8) top = css.y - bh - 12;
   if (top < 8) top = css.y + css.h - bh - 12;
+  top = Math.max(8, Math.min(top, window.innerHeight - bh - 8));
   const left = Math.min(Math.max(8, css.x + css.w / 2 - bw / 2), window.innerWidth - bw - 8);
   bar.style.left = `${left}px`;
   bar.style.top = `${top}px`;
-  const undo = bar.querySelector('[data-act="undo"]');
-  const redo = bar.querySelector('[data-act="redo"]');
-  if (undo) undo.disabled = !shapes.length;
-  if (redo) redo.disabled = !undone.length;
 }
 
 function setFill(input) {
@@ -253,11 +266,14 @@ function buildBar() {
     <button data-act="undo" data-tip="${t('Desfazer')}" data-key="Ctrl+Z">${svg('undo')}</button>
     <button data-act="redo" data-tip="${t('Refazer')}" data-key="Ctrl+Y">${svg('redo')}</button>
     <span class="sep"></span>
+    <span class="bar-actions">
     <button data-act="history" data-tip="${t('Últimos prints')}">${svg('history')}</button>
     <button data-act="pin" data-tip="${t('Fixar na tela')}">${svg('pin')}</button>
     <button data-act="save" data-tip="${t('Salvar')}" data-key="Ctrl+S">${svg('save')}</button>
+    <button data-act="ocr" class="ocr-launch" data-tip="${t('Reconhecer texto da seleção')}" aria-label="${t('Extrair texto')}">${svg('ocr')}<span>${t('Extrair texto')}</span></button>
     <button data-act="copy" class="main" data-tip="${t('Copiar')}" data-key="Ctrl+C">${svg('copy')}</button>
-    <button data-act="close" data-tip="${t('Cancelar')}" data-key="Esc">${svg('close')}</button>`;
+    <button data-act="close" data-tip="${t('Cancelar')}" data-key="Esc">${svg('close')}</button>
+    </span>`;
   const range = bar.querySelector('input');
   setFill(range);
   range.addEventListener('input', () => {
@@ -366,12 +382,13 @@ bar.addEventListener('click', (e) => {
   if (a) act(a.dataset.act);
 });
 
-async function exportPng() {
+async function exportPng(scale = 1) {
   commitText();
   const out = document.createElement('canvas');
-  out.width = Math.max(1, Math.round(sel.w));
-  out.height = Math.max(1, Math.round(sel.h));
+  out.width = Math.max(1, Math.round(sel.w * scale));
+  out.height = Math.max(1, Math.round(sel.h * scale));
   const c = out.getContext('2d');
+  c.scale(scale, scale);
   c.translate(-Math.round(sel.x), -Math.round(sel.y));
   c.drawImage(base, 0, 0);
   for (const s of shapes) drawShape(c, s);
@@ -393,18 +410,17 @@ async function act(name) {
   if (!sel || sel.w < 2 || sel.h < 2) return;
   if (mode === 'video') {
     if (name !== 'record' && name !== 'copy') return;
-    const even = (v) => Math.max(2, Math.floor(v / 2) * 2);
-    const x = Math.round(sel.x);
-    const y = Math.round(sel.y);
+    const region = window.HudCaptureGeometry.region(sel, view.width, view.height, view.width / ratio, true);
+    if (!region) return;
     window.hud.recordStart({
-      rect: { x, y, w: even(Math.min(sel.w, view.width - x)), h: even(Math.min(sel.h, view.height - y)) },
-      css: { x: sel.x / ratio, y: sel.y / ratio, width: sel.w / ratio, height: sel.h / ratio },
+      ...region,
       system: audio.system,
       mic: audio.mic,
     });
     return;
   }
   if (name === 'record') return;
+  if (name === 'ocr') return ocr.open();
   const png = await exportPng();
   if (name === 'copy') window.hud.captureCopy(png);
   else if (name === 'save') window.hud.captureSave(png);
@@ -466,6 +482,7 @@ function handleAt(e) {
 }
 
 selBox.addEventListener('pointerdown', (e) => {
+  if (ocr.opened) return;
   const h = handleAt(e);
   if (!h) return;
   e.stopPropagation();
@@ -474,6 +491,7 @@ selBox.addEventListener('pointerdown', (e) => {
 });
 
 view.addEventListener('pointerdown', (e) => {
+  if (ocr.opened) return;
   if (e.button !== 0) return;
   const p = toImage(e);
   if (editing) {
@@ -568,6 +586,10 @@ view.addEventListener('pointerup', () => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if (ocr.opened) {
+    if (e.key === 'Escape') { e.preventDefault(); ocr.close(); }
+    return;
+  }
   if (editing) return;
   const ctrl = e.ctrlKey || e.metaKey;
   if (e.key === 'Escape') window.hud.captureClose();
@@ -581,6 +603,10 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.hud.onCaptureKey((action) => {
+  if (ocr.opened) {
+    if (action === 'escape') ocr.close();
+    return;
+  }
   if (editing) {
     if (action === 'enter' || action === 'copy') commitText();
     else if (action === 'escape') {
@@ -618,6 +644,8 @@ async function begin() {
   const [settings, shot] = await Promise.all([window.hud.getSettings(), window.hud.captureImage()]);
   if (!shot) return window.hud.captureClose();
   window.HudI18n.setLang(settings.language);
+  window.HudI18n.apply();
+  ocr.close(false);
   theme.apply(settings.accent);
   palette = ['#ff3b5c', '#ffd23f', settings.accent, '#3d7dff', '#ffffff'];
   color = (settings.capture && settings.capture.color) || palette[0];
@@ -647,3 +675,17 @@ async function begin() {
 }
 
 window.hud.onCaptureStart(begin);
+window.hud.onCaptureRelease(() => {
+  ocr.close(false);
+  if (frame) cancelAnimationFrame(frame);
+  frame = 0;
+  if (base && base.close) base.close();
+  base = null;
+  blurred = null;
+  shapes = [];
+  undone = [];
+  sel = null;
+  draft = null;
+  view.width = 1;
+  view.height = 1;
+});

@@ -6,7 +6,6 @@ const ui = icons.ui;
 const root = document.getElementById('hud');
 
 const TEMP = { cpu: [80, 90], gpu: [78, 85], disk: [55, 65] };
-const LOAD = [65, 80];
 const LABELS = { cpu: 'CPU', gpu: 'GPU', ram: 'RAM', disk: 'SSD' };
 const SECOND_ICONS = { cpu: ui.thermo, gpu: ui.thermo, ram: ui.memory, disk: ui.thermo };
 const MINI_PLACEHOLDERS = {
@@ -28,6 +27,16 @@ let sliding = false;
 let fpsLive = false;
 let fpsEnter = false;
 let fpsHideTimer = 0;
+let appState = {};
+let healthSignature = '';
+let clockTimer = null;
+const alertStates = new Map();
+
+function sustainedAlert(key, candidate) {
+  const next = window.HudSensorState.sustained(alertStates.get(key), candidate, Date.now());
+  alertStates.set(key, next);
+  return next.level;
+}
 
 function isDock() {
   return settings.layout === 'dock';
@@ -39,7 +48,7 @@ function pickDisk(list) {
 }
 
 function showFps() {
-  return settings.modules.fps && settings.fpsEnabled;
+  return appState.platform !== 'linux' && settings.modules.fps && settings.fpsEnabled;
 }
 
 function fpsVisible() {
@@ -254,6 +263,7 @@ function toolbar() {
         <output class="num" data-k="tb.opacity">${opacity}%</output>
       </label>
       <div class="tb-hint">${t('Arraste pra mover · puxe o canto pra mudar o tamanho · solte na barra de tarefas pra virar Dock')}</div>
+      <div class="sensor-health" aria-live="polite"></div>
     </div>`;
 }
 
@@ -308,7 +318,7 @@ function build() {
 }
 
 function hasFpsValue() {
-  return !!(sensors && sensors.fps && fmt.has(sensors.fps.value));
+  return window.HudSensorState.reading(sensors, appState.sensor, settings) === 'ready' && !!(sensors && sensors.fps && fmt.has(sensors.fps.value));
 }
 
 function syncFps() {
@@ -370,7 +380,7 @@ function visible(key, on) {
 
 function meter(key, value) {
   each(key, (el) => {
-    el.style.width = `${fmt.has(value) ? Math.max(0, Math.min(100, value)) : 0}%`;
+    el.style.transform = `scaleX(${fmt.has(value) ? Math.max(0, Math.min(100, value)) / 100 : 0})`;
   });
 }
 
@@ -418,7 +428,10 @@ function extraHtml(items) {
 }
 
 function setMetric(key, { value, level, temp, tempLevel, extra, mini2 }) {
-  text(`${key}.value`, fmt.round(value));
+  const status = window.HudSensorState.reading(sensors, appState.sensor, settings);
+  const placeholder = status === 'loading' ? '…' : '—';
+  text(`${key}.value`, fmt.has(value) ? fmt.round(value) : placeholder);
+  each(`${key}.value`, (el) => el.dataset.state = fmt.has(value) ? 'ready' : status === 'ready' ? 'unavailable' : status);
   tone(`${key}.tone`, level);
   meter(`${key}.meter`, value);
   tone(`${key}.meter`, level);
@@ -427,7 +440,7 @@ function setMetric(key, { value, level, temp, tempLevel, extra, mini2 }) {
   text(`${key}.chip`, hasTemp ? fmt.temp(temp) : '');
   tone(`${key}.chipbox`, tempLevel);
   html(`${key}.extra`, extraHtml(extra || []));
-  text(`${key}.mini`, fmt.has(value) ? `${Math.round(value)}%` : '—');
+  text(`${key}.mini`, fmt.has(value) ? `${Math.round(value)}%` : placeholder);
   const second = mini2 !== undefined ? mini2 : hasTemp ? fmt.temp(temp) : '';
   visible(`${key}.mini2box`, !!second);
   text(`${key}.mini2`, second);
@@ -443,7 +456,8 @@ function updateLabels() {
 }
 
 function updateSensors() {
-  const s = sensors || {};
+  const fresh = window.HudSensorState.reading(sensors, appState.sensor, settings) === 'ready';
+  const s = fresh ? sensors : {};
   const cpu = s.cpu || {};
   const gpu = s.gpu || {};
   const ram = s.ram || {};
@@ -453,7 +467,7 @@ function updateSensors() {
   const coreText = cardLayout() === 'grid' ? 'máx {n}%' : 'núcleo máx {n}%';
   setMetric('cpu', {
     value: cpu.load,
-    level: fmt.level(cpu.load, ...LOAD),
+    level: fmt.level(cpu.temp, ...TEMP.cpu),
     temp: cpu.temp,
     tempLevel: fmt.level(cpu.temp, ...TEMP.cpu),
     extra: [
@@ -465,7 +479,7 @@ function updateSensors() {
   const vram = fmt.has(gpu.vramUsed) && fmt.has(gpu.vramTotal) ? `${(gpu.vramUsed / 1024).toFixed(1)}/${Math.round(gpu.vramTotal / 1024)} GB` : '';
   setMetric('gpu', {
     value: gpu.load,
-    level: fmt.level(gpu.load, ...LOAD),
+    level: fmt.level(gpu.temp, ...TEMP.gpu),
     temp: gpu.temp,
     tempLevel: fmt.level(gpu.temp, ...TEMP.gpu),
     extra: [[ui.memory, vram], [ui.zap, fmt.has(gpu.power) && `${Math.round(gpu.power)} W`]],
@@ -473,26 +487,53 @@ function updateSensors() {
 
   setMetric('ram', {
     value: ram.load,
-    level: fmt.level(ram.load, ...LOAD),
+    level: sustainedAlert('ram', fmt.level(ram.load, 90, 97)),
     extra: [[ui.memory, fmt.has(ram.used) && `${ram.used.toFixed(1)} / ${Math.round(ram.total)} GB`]],
     mini2: fmt.has(ram.used) ? `${ram.used.toFixed(1)}G` : '',
   });
 
   setMetric('disk', {
     value: disk.activity,
-    level: fmt.level(disk.activity, 85, 98),
+    level: fmt.level(disk.temp, ...TEMP.disk),
     temp: disk.temp,
     tempLevel: fmt.level(disk.temp, ...TEMP.disk),
     extra: [[ui.down, fmt.has(disk.read) && fmt.rate(disk.read)], [ui.up, fmt.has(disk.write) && fmt.rate(disk.write)]],
   });
 
   updateFps(s.fps || {});
+  updateHealth();
+}
+
+function updateHealth() {
+  const keys = [...metricKeys(), ...(showFps() ? ['fps'] : [])];
+  const issues = keys.map((key) => ({ key, ...window.HudSensorState.reason(key, sensors, appState.sensor, settings) }));
+  for (const item of issues) {
+    each(`${item.key}.label`, (el) => el.title = t(item.message));
+  }
+  const health = root.querySelector('.sensor-health');
+  if (!health) return;
+  const signature = JSON.stringify([issues, settings.language]);
+  if (health.dataset.signature === signature) return;
+  health.dataset.signature = signature;
+  health.replaceChildren();
+  for (const item of issues.filter((item) => item.status !== 'ready')) {
+    const line = document.createElement('div');
+    line.textContent = `${LABELS[item.key] || 'FPS'}: ${t(item.message)}`;
+    health.appendChild(line);
+  }
+  if (!health.children.length) health.textContent = t('Leitura atualizada');
+  if (issues.some((item) => ['permission', 'stopped', 'stale'].includes(item.status))) {
+    const button = document.createElement('button');
+    button.dataset.action = 'sensors';
+    button.textContent = t(appState.platform === 'linux' ? 'Reiniciar sensores' : 'Reiniciar sensores como admin');
+    health.appendChild(button);
+  }
 }
 
 function updateFps(fps) {
   if (!showFps()) return;
   const has = fmt.has(fps.value);
-  const level = has ? fmt.lowLevel(fps.value, 50, 30) : '';
+  const level = sustainedAlert('fps', has ? fmt.lowLevel(fps.value, 50, 30) : '');
   text('fps.value', has ? String(Math.round(fps.value)) : '—');
   tone('fps.tone', level);
   let app = '';
@@ -532,12 +573,41 @@ function applyTheme() {
 }
 
 function scheduleClock() {
+  clearTimeout(clockTimer);
+  if (document.visibilityState === 'hidden' || document.body.hidden) return;
   const now = Date.now();
-  setTimeout(() => {
+  clockTimer = setTimeout(() => {
     updateClock();
+    const health = window.HudSensorState.reading(sensors, appState.sensor, settings);
+    if (health !== healthSignature) {
+      healthSignature = health;
+      syncFps();
+      updateSensors();
+    }
     scheduleClock();
   }, 1000 - (now % 1000) + 5);
 }
+
+document.addEventListener('visibilitychange', async () => {
+  const visible = document.visibilityState !== 'hidden' && !document.body.hidden;
+  for (const video of root.querySelectorAll('video')) {
+    if (visible) video.play().catch(() => {});
+    else video.pause();
+  }
+  if (!visible) {
+    clearTimeout(clockTimer);
+    return;
+  }
+  if (!settings) return;
+  [sensors, weather, appState] = await Promise.all([window.hud.lastSensors(), window.hud.lastWeather(), window.hud.getState()]);
+  applyTheme();
+  build();
+  syncFps();
+  updateSensors();
+  updateClock();
+  updateWeather();
+  scheduleClock();
+});
 
 root.addEventListener('pointerdown', (event) => {
   const handle = event.target.closest('.grip');
@@ -625,6 +695,7 @@ root.addEventListener('click', (event) => {
   if (action.dataset.action === 'edit') window.hud.setSettings({ locked: false });
   else if (action.dataset.action === 'done') window.hud.setSettings({ locked: true });
   else if (action.dataset.action === 'settings') window.hud.openSettings();
+  else if (action.dataset.action === 'sensors') window.hud.restartSensors(appState.platform !== 'linux');
 });
 
 new ResizeObserver(() => {
@@ -635,6 +706,7 @@ new ResizeObserver(() => {
 
 async function init() {
   settings = await window.hud.getSettings();
+  appState = await window.hud.getState();
   sensors = await window.hud.lastSensors();
   fpsLive = hasFpsValue();
   weather = await window.hud.lastWeather();
@@ -645,6 +717,7 @@ async function init() {
 
   window.hud.onSettings((next) => {
     settings = next;
+    if (document.visibilityState === 'hidden' || document.body.hidden) return;
     applyTheme();
     build();
     syncToolbar();
@@ -652,6 +725,11 @@ async function init() {
   });
   window.hud.onSensors((data) => {
     sensors = data;
+    syncFps();
+    updateSensors();
+  });
+  window.hud.onState((next) => {
+    appState = next;
     syncFps();
     updateSensors();
   });

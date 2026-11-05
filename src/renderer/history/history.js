@@ -38,14 +38,26 @@ function render() {
     el.dataset.index = String(index);
     el.title = item.name;
     const thumb = item.thumb ? `<img src="${item.thumb}" alt="" />` : ICONS[item.kind];
-    const badge = item.kind === 'video' ? `<span class="badge">${ICONS.video}${t('Vídeo')}</span>` : '';
+    const badge = item.kind === 'video' ? `<span class="badge">${ICONS.video}${t(item.interrupted ? 'Interrompido' : 'Vídeo')}</span>` : '';
+    el.setAttribute('aria-label', `${item.name}, ${ago(item.time)}, ${size(item.size)}`);
     el.innerHTML = `<span class="thumb">${thumb}${badge}</span><span class="meta"><b>${ago(item.time)}</b><span>${size(item.size)}</span></span>`;
     grid.appendChild(el);
   });
 }
 
 async function refresh() {
-  items = await window.hud.historyList();
+  const warning = document.getElementById('history-warning');
+  try {
+    const result = await window.hud.historyList();
+    items = Array.isArray(result) ? result : result.items;
+    empty.querySelector('strong').textContent = t(result.warning && !items.length ? 'Não foi possível listar os arquivos' : 'Nenhum print ainda');
+    empty.querySelector('span').textContent = t(result.warning && !items.length ? 'Confira as pastas de captura nas configurações e tente de novo.' : 'Os prints e vídeos que você fizer aparecem aqui.');
+    warning.hidden = !result.warning && !items.some((item) => item.interrupted);
+    warning.textContent = t(result.warning ? 'Não deu pra ler uma das pastas. Confira o acesso nas configurações.' : 'Vídeo interrompido: o arquivo parcial foi preservado. A reprodução pode estar incompleta.');
+  } catch {
+    warning.hidden = false;
+    warning.textContent = t('Não deu pra carregar os arquivos. Tente abrir esta janela de novo.');
+  }
   render();
   grid.scrollTop = 0;
   const first = grid.querySelector('.item');

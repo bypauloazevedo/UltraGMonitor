@@ -12,6 +12,7 @@ function run(args) {
   execFileSync(process.execPath, args, { cwd: root, stdio: 'inherit' });
 }
 
+run([path.join(__dirname, 'prepare-ocr.js')]);
 if (windows) {
   run([path.join(__dirname, 'fetch-deps.js')]);
   run([path.join(__dirname, 'build-sensor.js')]);

@@ -1,7 +1,7 @@
 {
   "name": "ultragmonitor",
   "productName": "UltraGMonitor",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Monitor de CPU, GPU, RAM, SSD, FPS, relógio e clima que fica num canto da tela",
   "author": "Paulo Azevedo",
   "license": "GPL-3.0-only",
@@ -9,6 +9,10 @@
   "main": "src/main/main.js",
   "private": true,
   "scripts": {
+    "postinstall": "node scripts/prepare-ocr.js",
+    "prepare:ocr": "node scripts/prepare-ocr.js",
+    "test": "node --test tests/*.test.js",
+    "test:ui": "node scripts/check-ui.js",
     "start": "electron .",
     "setup": "node scripts/fetch-deps.js && npm run build:sensor",
     "build:sensor": "node scripts/build-sensor.js",
@@ -34,12 +38,23 @@
     "@fontsource/vt323": "^5.3.0"
   },
   "devDependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/por": "1.0.0",
+    "@tesseract.js-data/spa": "1.0.0",
     "electron": "^45.2.1",
-    "electron-builder": "^26.18.0"
+    "electron-builder": "^26.18.0",
+    "pngjs": "7.0.0",
+    "tesseract.js": "7.0.0"
   },
   "build": {
     "appId": "dev.paulo.ultragmonitor",
     "productName": "UltraGMonitor",
+    "extraResources": [
+      {
+        "from": "resources/ocr",
+        "to": "ocr"
+      }
+    ],
     "directories": {
       "output": ".build",
       "buildResources": "build"

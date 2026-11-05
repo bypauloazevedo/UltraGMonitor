@@ -1,10 +1,9 @@
-const fs = require('fs');
-const path = require('path');
 const { BrowserWindow, desktopCapturer } = require('electron');
 const paths = require('./paths');
 const folders = require('./folders');
 const { copyFileToClipboard } = require('./clipfile');
 const { t } = require('../renderer/shared/i18n');
+const { RecordingFile } = require('./recording-file');
 
 const BAR = { width: 236, height: 48 };
 
@@ -46,6 +45,9 @@ class Recorder {
     this.startedAt = 0;
     this.pausedTotal = 0;
     this.pausedAt = 0;
+    this.file = null;
+    this.finishing = false;
+    this.warnings = [];
   }
 
   elapsed() {
@@ -55,7 +57,7 @@ class Recorder {
   }
 
   sendState() {
-    const state = { active: this.active, paused: this.paused, elapsed: this.elapsed(), recording: !!this.startedAt };
+    const state = { active: this.active, paused: this.paused, elapsed: this.elapsed(), recording: !!this.startedAt, finishing: this.finishing, warnings: this.warnings };
     if (this.windows.bar && !this.windows.bar.isDestroyed()) this.windows.bar.webContents.send('record:state', state);
     this.onChange(state);
   }
@@ -81,6 +83,8 @@ class Recorder {
     this.display = display;
     this.startedAt = 0;
     this.pausedTotal = 0;
+    this.finishing = false;
+    this.warnings = [];
     try {
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
       const source = sources.find((s) => s.display_id === String(display.id)) || sources[0];
@@ -128,6 +132,9 @@ class Recorder {
         });
       });
       this.windows = { frame, bar, worker };
+      worker.webContents.on('render-process-gone', () => {
+        if (this.active) this.fail('A gravação foi interrompida');
+      });
     } catch (err) {
       this.fail(err.message);
     }
@@ -140,7 +147,7 @@ class Recorder {
 
   command(action) {
     const { worker } = this.windows;
-    if (!this.active || !worker || worker.isDestroyed()) return;
+    if (!this.active || this.finishing || !worker || worker.isDestroyed()) return;
     if (action === 'pause' && !this.paused) {
       this.paused = true;
       this.pausedAt = Date.now();
@@ -148,6 +155,7 @@ class Recorder {
       this.paused = false;
       this.pausedTotal += Date.now() - this.pausedAt;
     }
+    if (action === 'stop') this.finishing = true;
     worker.webContents.send('recorder:command', { action });
     this.sendState();
   }
@@ -156,35 +164,68 @@ class Recorder {
     this.command('stop');
   }
 
-  cancel() {
+  async cancel() {
     this.command('cancel');
+    const file = this.file;
+    this.file = null;
     this.cleanup();
+    if (file) await file.close(true);
   }
 
   toggle() {
     if (this.active) this.stop();
   }
 
-  async done(data, mime) {
+  owns(sender) {
+    return !!this.windows.worker && this.windows.worker.webContents === sender;
+  }
+
+  async open(mime) {
+    if (!this.active || this.file) throw new Error('Gravação indisponível');
+    const file = new RecordingFile(folders.ensure('videos'), `${t('Gravação')} ${stamp()}`);
+    this.file = file;
+    await file.open(String(mime));
+    return true;
+  }
+
+  async append(data) {
+    if (!this.file || !this.active) throw new Error('Gravação indisponível');
+    await this.file.append(data);
+    return true;
+  }
+
+  warning(message) {
+    if (!this.warnings.includes(message)) this.warnings.push(message);
+    this.sendState();
+    this.toast.show(`${t('Atenção ao áudio')}|${t(message)}`, 'error', this.display);
+  }
+
+  async done() {
     const display = this.display;
-    this.cleanup();
+    const file = this.file;
     try {
-      const folder = folders.ensure('videos');
-      const ext = mime.includes('mp4') ? 'mp4' : 'webm';
-      const file = path.join(folder, `${t('Gravação')} ${stamp()}.${ext}`);
-      fs.writeFileSync(file, Buffer.from(data));
-      copyFileToClipboard(file);
-      this.toast.show(`${t('Vídeo salvo')}|${t('Ctrl+V pra colar o arquivo')}`, 'ok', display);
+      if (!file) throw new Error('Gravação não iniciada');
+      const saved = await file.finish();
+      this.file = null;
+      const copied = await copyFileToClipboard(saved).catch(() => false);
+      this.toast.show(`${t(copied ? 'Vídeo salvo e copiado' : 'Vídeo salvo, mas não deu pra copiar')}|${t(copied ? 'Ctrl+V pra colar o arquivo' : 'Abra a pasta dos vídeos pra acessar o arquivo')}`, copied ? 'ok' : 'error', display);
+      return true;
     } catch (err) {
-      this.toast.show(t('Não deu pra salvar o vídeo'), 'error', display);
+      await this.fail(err.message);
+      return false;
+    } finally {
+      this.cleanup();
     }
   }
 
-  fail(message) {
+  async fail(message) {
     console.error('gravação falhou', message);
     const display = this.display;
+    const file = this.file;
+    this.file = null;
     this.cleanup();
-    this.toast.show(t('Não deu pra gravar'), 'error', display || undefined);
+    const partial = file && await file.close();
+    this.toast.show(`${t('Gravação interrompida')}|${t(partial ? 'Parte gravada preservada na pasta de vídeos' : 'Não deu pra gravar')}`, 'error', display || undefined);
   }
 
   cleanup() {
@@ -195,6 +236,7 @@ class Recorder {
     this.active = false;
     this.paused = false;
     this.startedAt = 0;
+    this.finishing = false;
     this.sendState();
   }
 }

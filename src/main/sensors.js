@@ -32,6 +32,12 @@ class Sensors extends EventEmitter {
     this.crashes = 0;
     this.restartTimer = null;
     this.shots = new Map();
+    this.elevatedRequested = false;
+    this.connectionTimer = null;
+    this.watchdog = null;
+    this.lastReading = 0;
+    this.readings = 0;
+    this.generation = 0;
     this.electronAdmin = processIsAdmin();
     this.status = { running: false, elevated: false, elevationDenied: false, missing: false };
   }
@@ -43,35 +49,50 @@ class Sensors extends EventEmitter {
 
   start({ elevated, fps }) {
     this.stop();
+    this.generation++;
     this.stopping = false;
     this.fps = fps;
+    this.elevatedRequested = !!elevated;
+    this.readings = 0;
+    this.setStatus({ running: false, starting: true, missing: false, failed: false });
     if (!fs.existsSync(this.exe)) {
-      this.setStatus({ running: false, missing: true });
+      this.setStatus({ running: false, starting: false, missing: true });
       return;
     }
     const name = `ugm-${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
     const server = net.createServer((socket) => this.onConnection(socket));
     this.server = server;
-    server.on('error', (err) => this.emit('log', `pipe: ${err.message}`));
+    server.on('error', (err) => {
+      this.emit('log', `pipe: ${err.message}`);
+      if (this.server === server && !this.stopping) this.scheduleRestart();
+    });
     server.listen(`\\\\.\\pipe\\${name}`, () => {
+      if (this.server !== server || this.stopping) return;
       const args = ['--pipe', name, '--presentmon', this.presentMon];
       if (fps) args.push('--fps');
       if (elevated && !this.electronAdmin) this.launchElevated(args);
       else this.launchDirect(args);
     });
+    this.connectionTimer = setTimeout(() => {
+      if (!this.socket && !this.stopping) this.scheduleRestart();
+    }, 30000);
   }
 
   launchDirect(args) {
     this.setStatus({ elevated: this.electronAdmin });
     const child = spawn(this.exe, args, { windowsHide: true, stdio: 'ignore' });
     this.child = child;
-    child.on('error', (err) => this.emit('log', `sensor: ${err.message}`));
+    child.on('error', (err) => {
+      this.emit('log', `sensor: ${err.message}`);
+      if (this.child === child && !this.stopping) this.scheduleRestart();
+    });
     child.on('exit', () => {
       if (this.child === child) this.child = null;
     });
   }
 
   launchElevated(args) {
+    const generation = this.generation;
     const list = args.map((a) => psQuote(a.includes(' ') ? `"${a}"` : a)).join(',');
     const script = [
       '$ErrorActionPreference = "Stop"',
@@ -82,8 +103,9 @@ class Sensors extends EventEmitter {
     ].join('\n');
     const encoded = Buffer.from(script, 'utf16le').toString('base64');
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], { windowsHide: true }, (err) => {
-      if (this.stopping) return;
+      if (this.stopping || generation !== this.generation) return;
       if (err) {
+        this.elevatedRequested = false;
         this.setStatus({ elevationDenied: true, elevated: false });
         this.launchDirect(args);
       } else {
@@ -98,13 +120,20 @@ class Sensors extends EventEmitter {
       return;
     }
     this.socket = socket;
-    this.setStatus({ running: true, missing: false });
+    clearTimeout(this.connectionTimer);
+    this.lastReading = Date.now();
+    this.setStatus({ running: true, starting: false, missing: false });
+    clearInterval(this.watchdog);
+    this.watchdog = setInterval(() => {
+      if (this.monitoring && Date.now() - this.lastReading > 8000) socket.destroy();
+    }, 2000);
     this.send(`monitor ${this.monitoring ? 'on' : 'off'}`);
     this.send(`hook ${this.hook ? 'on' : 'off'}`);
     socket.setEncoding('utf8');
     let buffer = '';
     socket.on('data', (chunk) => {
       buffer += chunk;
+      if (buffer.length > 4 * 1024 * 1024) { socket.destroy(); return; }
       let index;
       while ((index = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, index).trim();
@@ -113,7 +142,9 @@ class Sensors extends EventEmitter {
         try {
           const data = JSON.parse(line);
           if (data.type === 'sensors') {
-            this.crashes = 0;
+            this.lastReading = Date.now();
+            if (++this.readings >= 10) this.crashes = 0;
+            this.elevatedRequested = data.admin === true;
             this.emit('data', data);
           } else if (data.type === 'shot') {
             const pending = this.shots.get(data.id);
@@ -141,10 +172,20 @@ class Sensors extends EventEmitter {
   }
 
   scheduleRestart() {
+    if (this.restartTimer || this.stopping) return;
+    clearTimeout(this.connectionTimer);
+    clearInterval(this.watchdog);
     this.crashes += 1;
+    this.setStatus({ running: false, starting: this.crashes <= 5, failed: this.crashes > 5 });
     if (this.crashes > 5) return;
-    clearTimeout(this.restartTimer);
-    this.restartTimer = setTimeout(() => this.start({ elevated: false, fps: this.fps }), 2000 * this.crashes);
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = null;
+      this.start(this.restartOptions());
+    }, 2000 * this.crashes);
+  }
+
+  restartOptions() {
+    return { elevated: this.elevatedRequested, fps: this.fps };
   }
 
   send(command) {
@@ -180,12 +221,18 @@ class Sensors extends EventEmitter {
 
   setMonitoring(on) {
     this.monitoring = on;
+    this.lastReading = Date.now();
     this.send(`monitor ${on ? 'on' : 'off'}`);
   }
 
   stop() {
     this.stopping = true;
     clearTimeout(this.restartTimer);
+    this.restartTimer = null;
+    clearTimeout(this.connectionTimer);
+    clearInterval(this.watchdog);
+    for (const pending of this.shots.values()) pending({ ok: false, error: 'Leitura interrompida' });
+    this.shots.clear();
     if (this.socket) {
       try {
         this.socket.write('quit\n');
