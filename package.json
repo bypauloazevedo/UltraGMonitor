@@ -53,6 +53,10 @@
       {
         "from": "resources/ocr",
         "to": "ocr"
+      },
+      {
+        "from": "resources/ocr/node_modules",
+        "to": "ocr/node_modules"
       }
     ],
     "directories": {
