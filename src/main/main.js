@@ -15,6 +15,7 @@ const { Toast } = require('./toast');
 const { Recorder } = require('./recorder');
 const { Updates, upgradeWithWinget } = require('./updates');
 const { History } = require('./history');
+const { Ocr } = require('./ocr');
 const i18n = require('../renderer/shared/i18n');
 const { t } = i18n;
 
@@ -48,6 +49,7 @@ let updates = null;
 let updateNotice = null;
 let updating = false;
 let history = null;
+let ocr = null;
 
 function toggleRecording() {
   if (recorder.active) recorder.stop();
@@ -61,7 +63,7 @@ function hotkeys() {
 
 function broadcast(channel, payload) {
   for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.webContents.send(channel, payload);
+    if (!win.isDestroyed() && (!['sensors', 'weather'].includes(channel) || (win.isVisible() && !win.isMinimized()))) win.webContents.send(channel, payload);
   }
 }
 
@@ -84,6 +86,7 @@ function state() {
     update: updates ? updates.latest : null,
     folders: { shots: folders.folder('shots'), videos: folders.folder('videos') },
     platform: process.platform,
+    persistence: settings.persistence(),
   };
 }
 
@@ -167,6 +170,7 @@ function paintSettingsWindow() {
 }
 
 function applySettings(patch) {
+  patch = settings.sanitize(patch);
   const before = settings.get();
   const next = settings.update(patch);
   if (patch.locked !== undefined && patch.locked !== before.locked) overlay.applyLock();
@@ -207,12 +211,11 @@ function applySettings(patch) {
 
 function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) {
-    settingsWin.show();
-    settingsWin.focus();
+    settingsWin.emit('settings:present');
     return;
   }
   const saved = savedSettingsBounds();
-  settingsWin = new BrowserWindow({
+  const win = new BrowserWindow({
     width: saved ? saved.width : 480,
     height: saved ? saved.height : 720,
     x: saved ? saved.x : undefined,
@@ -232,8 +235,37 @@ function openSettings() {
       sandbox: true,
     },
   });
-  settingsWin.loadFile(paths.page('settings'));
-  settingsWin.once('ready-to-show', () => settingsWin.show());
+  settingsWin = win;
+  let loaded = false;
+  let initialized = false;
+  let presentTimer = null;
+  const present = () => {
+    if (!loaded || !initialized || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    clearTimeout(presentTimer);
+    presentTimer = setTimeout(() => {
+      if (!win.isDestroyed() && !win.isVisible()) {
+        win.show();
+        win.focus();
+      }
+    }, 50);
+  };
+  const startupTimer = setTimeout(() => {
+    if (win.isDestroyed() || loaded && initialized) return;
+    win.destroy();
+    dialog.showErrorBox(t('Configurações indisponíveis'), t('Não deu pra carregar as configurações. Tente abrir de novo.'));
+  }, 10000);
+  win.on('settings:present', present);
+  win.once('settings:ready', () => {
+    initialized = true;
+    present();
+  });
+  win.loadFile(paths.page('settings')).then(() => {
+    loaded = true;
+    present();
+  }).catch((error) => console.error('falha ao abrir configurações', error));
   let boundsTimer = null;
   const rememberBounds = () => {
     clearTimeout(boundsTimer);
@@ -243,11 +275,13 @@ function openSettings() {
       }
     }, 400);
   };
-  settingsWin.on('resize', rememberBounds);
-  settingsWin.on('move', rememberBounds);
-  settingsWin.on('closed', () => {
+  win.on('resize', rememberBounds);
+  win.on('move', rememberBounds);
+  win.on('closed', () => {
     clearTimeout(boundsTimer);
-    settingsWin = null;
+    clearTimeout(presentTimer);
+    clearTimeout(startupTimer);
+    if (settingsWin === win) settingsWin = null;
   });
 }
 
@@ -412,7 +446,17 @@ function registerIpc() {
   ipcMain.handle('open:pawnio', () => shell.openExternal(PAWNIO_URL));
   ipcMain.handle('open:update', openUpdate);
   ipcMain.handle('folder:choose', (_e, kind) => (folders.KEYS[kind] ? chooseFolder(kind) : settings.get()));
-  ipcMain.handle('folder:open', (_e, kind) => (folders.KEYS[kind] ? shell.openPath(folders.ensure(kind)) : ''));
+  ipcMain.handle('folder:open', async (_e, kind) => {
+    if (!folders.KEYS[kind]) return '';
+    try {
+      const error = await shell.openPath(folders.ensure(kind));
+      if (error) throw new Error(error);
+      return '';
+    } catch {
+      toast.show(t('Não deu pra abrir a pasta. Confira o acesso nas configurações.'), 'error');
+      return 'pasta indisponível';
+    }
+  });
   ipcMain.on('history:open', openHistory);
   ipcMain.handle('history:list', () => history.list());
   ipcMain.handle('history:copy', (_e, file) => history.copy(String(file)));
@@ -423,6 +467,9 @@ function registerIpc() {
   });
   ipcMain.on('history:close', () => history.hide());
   ipcMain.handle('open:settings', () => openSettings());
+  ipcMain.on('settings:ready', (e) => {
+    if (settingsWin && !settingsWin.isDestroyed() && e.sender === settingsWin.webContents) settingsWin.emit('settings:ready');
+  });
   ipcMain.handle('dock:info', () => overlay.dockInfo(overlay.dockExtra));
   ipcMain.handle('background:choose', async () => {
     const chosen = await background.choose(settingsWin);
@@ -442,6 +489,22 @@ function registerIpc() {
   ipcMain.handle('capture:save', (_e, png) => capture.save(png));
   ipcMain.handle('capture:pin', (_e, png, rect) => capture.pin(png, rect));
   ipcMain.on('capture:close', () => capture.close());
+  ipcMain.handle('capture:ocr', async (e, png) => {
+    if (!capture.owns(e.sender)) return { status: 'cancelled' };
+    try {
+      return await ocr.recognize(png, (value) => {
+        if (capture.owns(e.sender)) e.sender.send('ocr:progress', value);
+      });
+    } catch { return { status: 'error' }; }
+  });
+  ipcMain.handle('capture:ocr-cancel', (e) => { if (capture.owns(e.sender)) ocr.cancel(); });
+  ipcMain.handle('capture:copy-text', (e, text) => capture.owns(e.sender) ? capture.copyText(text) : false);
+  ipcMain.handle('capture:keys', (e, enabled) => {
+    if (!capture.owns(e.sender)) return false;
+    if (enabled === true) capture.holdKeys();
+    else capture.releaseKeys();
+    return true;
+  });
   ipcMain.handle('record:start', (_e, cfg) => {
     settings.update({ recordSystemAudio: !!cfg.system, recordMic: !!cfg.mic });
     const display = capture.region();
@@ -451,9 +514,12 @@ function registerIpc() {
     if (action === 'cancel') recorder.cancel();
     else recorder.command(action);
   });
-  ipcMain.on('recorder:started', () => recorder.started());
-  ipcMain.on('recorder:done', (_e, data, mime) => recorder.done(data, mime));
-  ipcMain.on('recorder:error', (_e, message) => recorder.fail(message));
+  ipcMain.on('recorder:started', (e) => { if (recorder.owns(e.sender)) recorder.started(); });
+  ipcMain.handle('recorder:open', (e, mime) => recorder.owns(e.sender) ? recorder.open(mime) : false);
+  ipcMain.handle('recorder:chunk', (e, data) => recorder.owns(e.sender) ? recorder.append(data) : false);
+  ipcMain.handle('recorder:done', (e) => recorder.owns(e.sender) ? recorder.done() : false);
+  ipcMain.on('recorder:warning', (e, message) => { if (recorder.owns(e.sender)) recorder.warning(message); });
+  ipcMain.on('recorder:error', (e, message) => { if (recorder.owns(e.sender)) recorder.fail(message); });
   ipcMain.on('window:close', (e) => {
     const win = BrowserWindow.fromWebContents(e.sender);
     if (win && win !== overlay.win && win !== settingsWin) win.close();
@@ -479,6 +545,7 @@ app.on('second-instance', (_e, argv) => {
 app.whenReady().then(() => {
   if (!hasLock) return;
   settings.load();
+  settings.onPersistence(() => broadcast('state', state()));
   if (!IS_WIN && settings.get().layout === 'dock') settings.update({ layout: settings.get().layoutBeforeDock || 'card' });
   if (app.isPackaged && settings.isFirstRun()) settings.update({ startWithWindows: true });
   if (!i18n.LANGS.includes(settings.get().language)) settings.update({ language: i18n.pick(app.getLocale()) });
@@ -489,9 +556,9 @@ app.whenReady().then(() => {
 
   sensors = new Sensors({ exe: paths.sensorExe(), presentMon: paths.presentMonExe() });
   sensors.on('data', (data) => {
-    lastSensors = data;
+    lastSensors = { ...data, receivedAt: Date.now() };
     overlay.setFullscreen(data.fullscreen);
-    broadcast('sensors', data);
+    broadcast('sensors', lastSensors);
   });
   sensors.on('status', () => broadcast('state', state()));
   sensors.on('key', (name) => {
@@ -533,8 +600,10 @@ app.whenReady().then(() => {
       if (overlay.win && !overlay.win.isDestroyed()) overlay.win.hide();
     },
     afterShot: () => overlay.refreshVisibility(),
+    onClose: () => { if (ocr) ocr.cancel(); },
   });
-  history = new History({ toast, getSettings: () => settings.get(), pinFile: (file) => capture.pinFile(file) });
+  ocr = new Ocr();
+  history = new History({ toast, getSettings: () => settings.get(), pinFile: (file) => capture.pinFile(file), activeRecording: () => recorder.file && recorder.file.partial });
   setTimeout(() => capture.warm(), 1500);
   createTray();
   registerHotkeys();
@@ -565,5 +634,6 @@ app.on('will-quit', () => {
   if (sensors) sensors.stop();
   if (weather) weather.stop();
   if (updates) updates.stop();
+  if (ocr) ocr.cancel();
   settings.flush();
 });

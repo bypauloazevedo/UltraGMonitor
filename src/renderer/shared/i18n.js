@@ -469,6 +469,85 @@
   };
 
   const STRINGS = { en, es };
+  const improvements = {
+    'Extrair texto': ['Extract text', 'Extraer texto'],
+    'Reconhecer texto da seleção': ['Recognize text in the selection', 'Reconocer texto de la selección'],
+    'Texto da imagem': ['Text from image', 'Texto de la imagen'],
+    'Reconhecido neste computador': ['Recognized on this computer', 'Reconocido en este equipo'],
+    'Voltar à captura': ['Back to capture', 'Volver a la captura'],
+    'Confira antes de copiar. Letras pequenas, imagens borradas e fundos com pouco contraste podem causar erros no reconhecimento.': ['Review before copying. Small letters, blurry images and low-contrast backgrounds may cause recognition errors.', 'Revisa antes de copiar. Las letras pequeñas, las imágenes borrosas y los fondos de bajo contraste pueden causar errores de reconocimiento.'],
+    'Revise ou edite o texto': ['Review or edit the text', 'Revisa o edita el texto'],
+    'Ver imagem selecionada': ['View selected image', 'Ver imagen seleccionada'],
+    'Área selecionada para reconhecer o texto': ['Selected area for text recognition', 'Área seleccionada para reconocer el texto'],
+    'Tentar novamente': ['Try again', 'Intentar de nuevo'],
+    'Copiar texto': ['Copy text', 'Copiar texto'],
+    'Reconhecendo texto…': ['Recognizing text…', 'Reconociendo texto…'],
+    'Texto reconhecido. Você pode corrigir antes de copiar.': ['Text recognized. You can correct it before copying.', 'Texto reconocido. Puedes corregirlo antes de copiar.'],
+    'Alguns trechos podem estar incorretos. Revise o texto ou selecione uma imagem mais nítida.': ['Some passages may be incorrect. Review the text or select a clearer image.', 'Algunos fragmentos pueden ser incorrectos. Revisa el texto o selecciona una imagen más nítida.'],
+    'Não encontramos texto nessa área. Tente selecionar um trecho maior ou mais legível.': ['No text found in this area. Try selecting a larger or more legible region.', 'No encontramos texto en esta área. Intenta seleccionar un fragmento más grande o legible.'],
+    'Os arquivos de reconhecimento não estão disponíveis. Reinstale o app e tente de novo.': ['Recognition files are unavailable. Reinstall the app and try again.', 'Los archivos de reconocimiento no están disponibles. Reinstala la aplicación e inténtalo de nuevo.'],
+    'Essa imagem é grande demais para reconhecer. Selecione uma área menor.': ['This image is too large to recognize. Select a smaller area.', 'Esta imagen es demasiado grande para reconocer. Selecciona un área más pequeña.'],
+    'Não deu pra reconhecer o texto. Tente de novo ou selecione uma área mais legível.': ['Could not recognize text. Try again or select a more legible area.', 'No se pudo reconocer el texto. Inténtalo de nuevo o selecciona un área más legible.'],
+    'Texto selecionado copiado': ['Selected text copied', 'Texto seleccionado copiado'],
+    'Texto copiado': ['Text copied', 'Texto copiado'],
+    'Não deu pra copiar o texto. Tente novamente.': ['Could not copy text. Try again.', 'No se pudo copiar el texto. Inténtalo de nuevo.'],
+    'Configurações indisponíveis': ['Settings unavailable', 'Configuración no disponible'],
+    'Não deu pra carregar as configurações. Tente abrir de novo.': ['Could not load settings. Try opening them again.', 'No se pudo cargar la configuración. Intenta abrirla de nuevo.'],
+    'Não deu pra capturar a tela. Tente de novo.': ['Could not capture the screen. Try again.', 'No se pudo capturar la pantalla. Inténtalo de nuevo.'],
+    'Não foi possível listar os arquivos': ['Could not list files', 'No se pudieron listar los archivos'],
+    'Confira as pastas de captura nas configurações e tente de novo.': ['Check the capture folders in settings and try again.', 'Comprueba las carpetas de captura en la configuración e inténtalo de nuevo.'],
+    'Não deu pra abrir a pasta. Confira o acesso nas configurações.': ['Could not open the folder. Check access in settings.', 'No se pudo abrir la carpeta. Comprueba el acceso en la configuración.'],
+    'Monitoramento desligado': ['Monitoring is off', 'Monitoreo desactivado'],
+    'Carregando sensores…': ['Loading sensors…', 'Cargando sensores…'],
+    'Leitura interrompida. Reinicie os sensores.': ['Reading interrupted. Restart sensors.', 'Lectura interrumpida. Reinicia los sensores.'],
+    'Leitura desatualizada. Reconectando os sensores…': ['Reading out of date. Reconnecting sensors…', 'Lectura desactualizada. Reconectando sensores…'],
+    'Medição de FPS desligada': ['FPS monitoring is off', 'Medición de FPS desactivada'],
+    'FPS precisa de administrador': ['FPS requires administrator access', 'Los FPS requieren permisos de administrador'],
+    'FPS indisponível. Reinicie os sensores.': ['FPS unavailable. Restart sensors.', 'FPS no disponibles. Reinicia los sensores.'],
+    'Aguardando jogo em foco': ['Waiting for a focused game', 'Esperando un juego en primer plano'],
+    'Lendo FPS do jogo em foco': ['Reading FPS of the focused game', 'Leyendo FPS del juego en primer plano'],
+    'Temperatura indisponível — precisa de administrador': ['Temperature unavailable — administrator access required', 'Temperatura no disponible — requiere administrador'],
+    'Temperatura indisponível — instale o PawnIO': ['Temperature unavailable — install PawnIO', 'Temperatura no disponible — instala PawnIO'],
+    'Sensor indisponível neste dispositivo': ['Sensor unavailable on this device', 'Sensor no disponible en este dispositivo'],
+    'Temperatura não informada pelo hardware': ['Hardware did not report a temperature', 'El hardware no informó la temperatura'],
+    'Leitura atualizada': ['Readings up to date', 'Lectura actualizada'],
+    'Reiniciar sensores': ['Restart sensors', 'Reiniciar sensores'],
+    'Atenção ao áudio': ['Audio warning', 'Aviso de audio'],
+    'O áudio do PC não está sendo gravado': ['PC audio is not being recorded', 'No se está grabando el audio del PC'],
+    'O microfone não está sendo gravado': ['The microphone is not being recorded', 'No se está grabando el micrófono'],
+    'Uma fonte de áudio foi desconectada': ['An audio source was disconnected', 'Se desconectó una fuente de audio'],
+    'Vídeo salvo e copiado': ['Video saved and copied', 'Video guardado y copiado'],
+    'Vídeo salvo, mas não deu pra copiar': ['Video saved, but could not be copied', 'Video guardado, pero no se pudo copiar'],
+    'Abra a pasta dos vídeos pra acessar o arquivo': ['Open the video folder to access the file', 'Abre la carpeta de videos para acceder al archivo'],
+    'Gravação interrompida': ['Recording interrupted', 'Grabación interrumpida'],
+    'Parte gravada preservada na pasta de vídeos': ['Partial recording preserved in the video folder', 'Grabación parcial conservada en la carpeta de videos'],
+    'Salvando…': ['Saving…', 'Guardando…'],
+    'Print copiado, mas não deu pra salvar': ['Screenshot copied, but could not be saved', 'Captura copiada, pero no se pudo guardar'],
+    'Confira o acesso à pasta dos prints': ['Check access to the screenshot folder', 'Comprueba el acceso a la carpeta de capturas'],
+    'Print salvo e copiado': ['Screenshot saved and copied', 'Captura guardada y copiada'],
+    'Não deu pra salvar o print': ['Could not save the screenshot', 'No se pudo guardar la captura'],
+    'Print fixado, mas não deu pra salvar': ['Screenshot pinned, but could not be saved', 'Captura fijada, pero no se pudo guardar'],
+    'Não deu pra mover o arquivo pra lixeira': ['Could not move the file to the recycle bin', 'No se pudo mover el archivo a la papelera'],
+    'Prévia ao vivo': ['Live preview', 'Vista previa en vivo'],
+    'Prévia do widget': ['Widget preview', 'Vista previa del widget'],
+    'As mudanças aparecem aqui na hora. A prévia usa as leituras atuais do seu PC.': ['Changes appear here immediately. The preview uses current readings from your PC.', 'Los cambios aparecen aquí al instante. La vista previa usa las lecturas actuales de tu PC.'],
+    'Compare os números que você vai ler no widget.': ['Compare the numbers you will read in the widget.', 'Compara los números que vas a leer en el widget.'],
+    'Ver todas as fontes': ['Show all fonts', 'Ver todas las fuentes'],
+    'Mostrar menos fontes': ['Show fewer fonts', 'Mostrar menos fuentes'],
+    'Interrompido': ['Interrupted', 'Interrumpido'],
+    'Não deu pra ler uma das pastas. Confira o acesso nas configurações.': ['Could not read one of the folders. Check access in settings.', 'No se pudo leer una de las carpetas. Comprueba el acceso en la configuración.'],
+    'Vídeo interrompido: o arquivo parcial foi preservado. A reprodução pode estar incompleta.': ['Interrupted video: the partial file was preserved. Playback may be incomplete.', 'Video interrumpido: se conservó el archivo parcial. La reproducción puede estar incompleta.'],
+    'Não deu pra carregar os arquivos. Tente abrir esta janela de novo.': ['Could not load files. Try opening this window again.', 'No se pudieron cargar los archivos. Intenta abrir esta ventana de nuevo.'],
+    'Não deu pra salvar as configurações': ['Could not save settings', 'No se pudo guardar la configuración'],
+    'Seus ajustes estão ativos nesta sessão. Confira o acesso à pasta de dados.': ['Your settings are active for this session. Check access to the data folder.', 'Tus ajustes están activos en esta sesión. Comprueba el acceso a la carpeta de datos.'],
+    'Configurações recuperadas': ['Settings recovered', 'Configuración recuperada'],
+    'O arquivo anterior estava inválido. Usamos a cópia de segurança quando disponível.': ['The previous file was invalid. We used the backup when available.', 'El archivo anterior no era válido. Usamos la copia de seguridad cuando estaba disponible.'],
+    'Aguardando a conexão com o ajudante de sensores.': ['Waiting for the sensor helper connection.', 'Esperando la conexión con el ayudante de sensores.'],
+  };
+  for (const [key, [english, spanish]] of Object.entries(improvements)) {
+    en[key] = english;
+    es[key] = spanish;
+  }
   let lang = 'pt';
   let staticNodes = null;
 
@@ -503,8 +582,8 @@
       const [trail] = node.nodeValue.match(/\s*$/);
       list.push({ node, key, lead, trail });
     }
-    for (const el of scope.querySelectorAll('[placeholder], [title]')) {
-      for (const attr of ['placeholder', 'title']) {
+    for (const el of scope.querySelectorAll('[placeholder], [title], [aria-label]')) {
+      for (const attr of ['placeholder', 'title', 'aria-label']) {
         if (el.hasAttribute(attr)) list.push({ el, attr, key: el.getAttribute(attr) });
       }
     }

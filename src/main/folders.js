@@ -16,14 +16,8 @@ function folder(kind) {
 
 function ensure(kind) {
   const dir = folder(kind);
-  try {
-    fs.mkdirSync(dir, { recursive: true });
-    return dir;
-  } catch {
-    const safe = fallback(kind);
-    fs.mkdirSync(safe, { recursive: true });
-    return safe;
-  }
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
 }
 
 module.exports = { KEYS, folder, ensure };

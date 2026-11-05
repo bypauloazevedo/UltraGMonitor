@@ -23,12 +23,13 @@ function stamp() {
 }
 
 class Capture {
-  constructor({ sensors, toast, getSettings, beforeShot, afterShot }) {
+  constructor({ sensors, toast, getSettings, beforeShot, afterShot, onClose = () => {} }) {
     this.sensors = sensors;
     this.toast = toast;
     this.getSettings = getSettings;
     this.beforeShot = beforeShot;
     this.afterShot = afterShot;
+    this.onClose = onClose;
     this.win = null;
     this.busy = false;
     this.display = null;
@@ -128,6 +129,7 @@ class Capture {
       console.error('captura falhou', err);
       this.busy = false;
       this.afterShot();
+      this.toast.show(t('Não deu pra capturar a tela. Tente de novo.'), 'error', display);
     }
   }
 
@@ -150,9 +152,23 @@ class Capture {
     this.releaseKeys();
     if (this.win && !this.win.isDestroyed() && this.win.isVisible()) this.win.hide();
     if (!this.busy) return;
+    this.onClose();
     this.busy = false;
     this.shot = null;
+    if (this.win && !this.win.isDestroyed()) this.win.webContents.send('capture:release');
     this.afterShot();
+  }
+
+  owns(sender) {
+    return this.busy && this.win && !this.win.isDestroyed() && this.win.webContents === sender;
+  }
+
+  async copyText(text) {
+    if (typeof text !== 'string' || !text.trim() || text.length > 1000000) return false;
+    try {
+      await clipboard.writeText(text);
+      return await clipboard.readText() === text;
+    } catch { return false; }
   }
 
   region() {
@@ -162,21 +178,23 @@ class Capture {
   }
 
   keep(png) {
-    if (this.getSettings().autoSaveShots === false) return;
+    if (this.getSettings().autoSaveShots === false) return { disabled: true };
     try {
       const folder = folders.ensure('shots');
       const name = `${t('Print')} ${stamp()}`;
       let file = path.join(folder, `${name}.png`);
       for (let i = 2; fs.existsSync(file); i++) file = path.join(folder, `${name} (${i}).png`);
       fs.writeFileSync(file, png);
+      return { file };
     } catch (err) {
       console.error('não deu pra guardar o print', err);
+      return { error: true };
     }
   }
 
   async copy(buffer) {
     const png = Buffer.from(buffer);
-    this.keep(png);
+    const saved = this.keep(png);
     let ok = false;
     for (let i = 0; i < 3 && !ok; i++) {
       try {
@@ -186,14 +204,20 @@ class Capture {
     }
     const display = this.display;
     const keepOpen = this.getSettings().captureCloseOnCopy === false;
-    if (!keepOpen) this.close();
-    if (ok) this.toast.show(`${t('Print copiado')}|${t('Ctrl+V pra colar')}`, 'ok', display);
+    if (!keepOpen && ok) this.close();
+    if (ok && saved.error) this.toast.show(`${t('Print copiado, mas não deu pra salvar')}|${t('Confira o acesso à pasta dos prints')}`, 'error', display);
+    else if (ok) this.toast.show(`${t(saved.file ? 'Print salvo e copiado' : 'Print copiado')}|${t('Ctrl+V pra colar')}`, 'ok', display);
     else this.toast.show(t('Não deu pra copiar o print'), 'error', display);
     return ok;
   }
 
   async save(buffer) {
-    const folder = folders.ensure('shots');
+    let folder;
+    try { folder = folders.ensure('shots'); }
+    catch {
+      this.toast.show(`${t('Não deu pra salvar o print')}|${t('Confira o acesso à pasta dos prints')}`, 'error', this.display);
+      return false;
+    }
     this.releaseKeys();
     const result = await dialog.showSaveDialog(this.win, {
       title: t('Salvar print'),
@@ -204,7 +228,13 @@ class Capture {
       if (this.busy) this.holdKeys();
       return false;
     }
-    fs.writeFileSync(result.filePath, Buffer.from(buffer));
+    try {
+      fs.writeFileSync(result.filePath, Buffer.from(buffer));
+    } catch {
+      if (this.busy) this.holdKeys();
+      this.toast.show(`${t('Não deu pra salvar o print')}|${t('Confira o acesso à pasta dos prints')}`, 'error', this.display);
+      return false;
+    }
     const display = this.display;
     this.close();
     this.toast.show(`${t('Print salvo')}|${path.basename(result.filePath)}`, 'ok', display);
@@ -213,10 +243,11 @@ class Capture {
 
   pin(buffer, rect) {
     const { bounds } = this.display;
-    this.keep(Buffer.from(buffer));
+    const saved = this.keep(Buffer.from(buffer));
     const image = nativeImage.createFromBuffer(Buffer.from(buffer));
     this.openPin(image, { x: bounds.x + rect.x, y: bounds.y + rect.y, width: rect.width, height: rect.height });
     this.close();
+    if (saved.error) this.toast.show(`${t('Print fixado, mas não deu pra salvar')}|${t('Confira o acesso à pasta dos prints')}`, 'error', this.display);
   }
 
   pinFile(file) {

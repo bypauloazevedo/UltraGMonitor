@@ -69,7 +69,8 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 
 <sub>* Temperatura e watts da CPU precisam do driver PawnIO, que o instalador já instala.</sub>
 
-- **Cores de alerta:** o uso fica amarelo a partir de 65% e vermelho a partir de 80%. As temperaturas têm limites próprios pra CPU, GPU e SSD.
+- **Cores de alerta:** CPU, GPU e SSD usam a temperatura pra sinalizar atenção; uso alto durante um jogo não fica vermelho sozinho. A RAM avisa a partir de 90% e fica vermelha a partir de 97%, quando o uso persiste por 3 segundos. As temperaturas têm limites próprios pra CPU, GPU e SSD.
+- **Estado dos sensores:** destrave o widget pra ver se está carregando, sem permissão, com leitura interrompida ou com algum sensor indisponível. Dados antigos deixam de aparecer como se ainda fossem atuais.
 - **Nome do hardware do seu jeito:** só "CPU" e "GPU", o nome (i7-12700F, RTX 4060 Ti) ou só o modelo (12700F, 4060 Ti).
 
 ### FPS do jogo
@@ -77,7 +78,7 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 - FPS, **1% low** e **frametime** do jogo que está em foco, com o nome do jogo numa etiqueta em cima do quadro.
 - Medido pelo [PresentMon](https://github.com/GameTechDev/PresentMon), da Intel, que lê os eventos do próprio Windows. Nada é injetado no jogo e nenhum arquivo dele é tocado.
 - Sem jogo rodando, o FPS sai de cena. Quando o jogo abre, ele volta sozinho com uma transição suave.
-- O número muda de cor quando o FPS cai: amarelo em 50 ou menos, vermelho em 30 ou menos.
+- O número muda de cor quando a queda persiste por 3 segundos: amarelo em 50 FPS ou menos, vermelho em 30 ou menos.
 - Liga e desliga com um atalho, sem abrir nada.
 
 ### Relógio, data e clima
@@ -110,6 +111,7 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 - **10 ferramentas:** lápis, linha, seta, retângulo, retângulo cheio, círculo, marcador, texto, desfoque (pra esconder senha, chave e dado pessoal) e numeração de passos.
 - 5 cores e espessura ajustável, com desfazer e refazer.
 - **Copiar** com `Ctrl+C`, **salvar** com `Ctrl+S` ou **fixar na tela**, como uma janelinha que fica por cima de tudo.
+- **Extrair texto:** selecione uma área com texto e abra uma prévia editável antes de copiar. Dá pra copiar tudo ou só o trecho selecionado. O reconhecimento funciona offline em português, inglês e espanhol, sem cadastro ou serviço pago. Letras pequenas, borradas ou com pouco contraste podem sair erradas; o app avisa pra revisar.
 - Todo print copiado também vira um arquivo PNG na pasta de prints, pra você achar depois.
 - **Últimos prints:** uma janelinha com os prints e vídeos mais recentes. Clique pra copiar de novo, arraste pra soltar direto no chat ou no e-mail, ou use o botão direito pra fixar, abrir, mostrar na pasta ou mandar pra lixeira.
 - No Windows, dá pra usar o **`Win+Shift+S`** pra abrir a captura do UltraGMonitor no lugar da Ferramenta de Captura (opcional, na aba Atalhos).
@@ -122,12 +124,15 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 - Escolha a área e grave com o **som do PC** e o **microfone**, ligando e desligando cada um na hora.
 - Uma barra flutuante mostra o tempo e deixa pausar, continuar e parar.
 - O vídeo vai pra pasta de vídeos em MP4 e **já fica copiado**: é só dar `Ctrl+V` no chat, no e-mail ou na issue.
+- Os blocos de vídeo são gravados no disco durante a captura. Se houver uma interrupção, o arquivo `.partial.mp4` ou `.partial.webm` fica preservado e identificado em Últimos prints; a reprodução do arquivo parcial pode estar incompleta. O formato WebM é usado quando o MP4 não está disponível.
+- O app avisa se não conseguiu captar o áudio do PC ou o microfone e diferencia vídeo salvo de vídeo copiado.
 
 ### Personalização
 
 ![O mesmo Card com cores e fontes diferentes](docs/images/cores.png)
 
 - **16 fontes** e **10 cores de destaque**.
+- **Prévia ao vivo** na aba Aparência, com as leituras atuais do PC. As fontes mostram exemplos de hora, porcentagem e temperatura; use **Ver todas as fontes** para expandir a lista.
 - Tamanho de cada parte: relógio, espessura do relógio, data, clima e números.
 - **Transparência do fundo**, que dá pra ajustar também direto na barra de edição do widget, sem abrir as configurações.
 - **Fundo animado** com GIF, WebP, imagem ou vídeo (no Card e no Compacto).
@@ -228,6 +233,7 @@ Dentro da captura:
 - Sem conta, sem anúncio e sem telemetria.
 - O app só se conecta a dois lugares: o Open-Meteo, pra buscar a cidade e o clima, e o GitHub, uma vez por dia, pra ver se saiu versão nova (dá pra desligar na aba Sistema).
 - Prints e vídeos ficam só no seu computador.
+- A extração de texto roda no próprio computador, com os arquivos de reconhecimento incluídos no app. Nenhuma imagem ou texto é enviado pra um servidor.
 - As configurações ficam num arquivo local, na pasta de dados do app (`%APPDATA%\UltraGMonitor`).
 
 ## Como funciona
@@ -272,6 +278,8 @@ npm start
 
 O `npm run setup` baixa o PresentMon e o PawnIO e compila o ajudante em C#.
 
+`npm test` verifica os caminhos de sensores, permissões, RAM, captura, gravação e recuperação das configurações. `npm run test:ui` verifica as telas e grava um vídeo de teste com pausa, retomada e reprodução. No Linux sem ambiente gráfico, use `xvfb-run -a npm run test:ui`.
+
 No Linux, basta o Node.js: rode `npm install` e `npm start`. Lá os sensores são lidos direto pelo app, sem o ajudante em C#.
 
 Pra gerar o instalador:
@@ -284,7 +292,9 @@ No Windows sai o instalador `.exe`; no Linux, o `.AppImage` e o `.deb`. Tudo vai
 
 ### Publicando uma versão
 
-Ao criar uma tag `v*` (por exemplo, `v0.1.0`), o GitHub Actions gera o instalador e publica a versão na página de Releases.
+As mudanças de cada versão ficam no [changelog](CHANGELOG.md). Atualize a versão do app e essa lista antes de criar a tag.
+
+Ao criar uma tag `v*` (por exemplo, `v0.5.0`), o GitHub Actions testa e gera os instaladores do Windows e do Linux. A publicação só acontece quando os dois terminam, usando as notas da versão no changelog.
 
 ## Contribuindo
 
@@ -311,6 +321,7 @@ O nome **UltraGMonitor** e o logo são de Paulo Azevedo e **não** estão cobert
 - [PawnIO](https://pawnio.eu/): driver de acesso ao hardware
 - [Open-Meteo](https://open-meteo.com/): dados do clima
 - [Electron](https://www.electronjs.org/): base do app
+- [Tesseract.js](https://github.com/naptha/tesseract.js) (Apache-2.0): reconhecimento de texto offline
 - Fontes do [Google Fonts](https://fonts.google.com/) via [Fontsource](https://fontsource.org/)
 
 ---

@@ -67,6 +67,10 @@ body {
 }
 
 #bar {
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  flex-wrap: wrap;
+  justify-content: center;
   position: absolute;
   display: flex;
   align-items: center;
@@ -75,6 +79,14 @@ body {
   border-radius: 14px;
   background: rgba(12, 14, 19, 0.96);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+#bar[hidden] { display: none; }
+
+#bar .bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 #bar button {
@@ -277,3 +289,190 @@ body {
   font-weight: 700;
   line-height: 1.25;
 }
+
+#bar .ocr-launch {
+  width: auto;
+  min-width: 36px;
+  display: inline-flex;
+  gap: 7px;
+  padding-inline: 10px;
+  color: var(--accent);
+  font: 600 12px var(--font);
+  white-space: nowrap;
+}
+
+.ocr-panel {
+  position: fixed;
+  z-index: 8;
+  top: 16px;
+  right: 16px;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px;
+  border: 1px solid #343e4e;
+  border-radius: 14px;
+  background: #10151e;
+  color: #eef2f7;
+  font: 14px/1.5 var(--font);
+  user-select: text;
+}
+
+.ocr-panel[hidden],
+.ocr-panel [hidden] {
+  display: none;
+}
+
+.ocr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.ocr-header h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.ocr-header p {
+  margin: 3px 0 0;
+  color: #b9c7d9;
+  font-size: 12px;
+}
+
+.ocr-panel button {
+  padding: 9px 12px;
+  border: 1px solid #425169;
+  border-radius: 8px;
+  background: #192231;
+  color: #eef2f7;
+  font: 600 13px var(--font);
+  cursor: pointer;
+}
+
+.ocr-progress progress {
+  width: 100%;
+  height: 6px;
+  appearance: none;
+}
+
+.ocr-progress progress::-webkit-progress-bar { background: #253247; border-radius: 4px; }
+.ocr-progress progress::-webkit-progress-value { background: var(--accent); border-radius: 4px; }
+
+.ocr-panel button:hover {
+  background: #253247;
+}
+
+.ocr-panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ocr-panel .ocr-close {
+  width: 34px;
+  height: 34px;
+  padding: 6px;
+  flex: none;
+}
+
+.ocr-close svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.ocr-advice {
+  margin: 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: #1b2534;
+  color: #c9d5e5;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.ocr-low-confidence {
+  color: #ffdfad;
+  background: #34291a;
+}
+
+.ocr-status {
+  margin: 0;
+  color: #c9d5e5;
+  font-size: 13px;
+}
+
+.ocr-status:empty {
+  display: none;
+}
+
+.ocr-status[data-kind='success'] { color: #8ce8bc; }
+.ocr-status[data-kind='warning'] { color: #ffdfad; }
+.ocr-status[data-kind='error'] { color: #ffb9bb; }
+
+.ocr-label {
+  color: #dce5f2;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ocr-result {
+  width: 100%;
+  height: clamp(120px, 30vh, 340px);
+  min-height: 90px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid #425169;
+  border-radius: 8px;
+  background: #090e16;
+  color: #eef2f7;
+  font: 14px/1.6 var(--mono);
+  tab-size: 4;
+  user-select: text;
+}
+
+.ocr-result::selection { background: #286077; color: #fff; }
+.ocr-result { caret-color: var(--accent); }
+
+.ocr-source {
+  color: #b9c7d9;
+  font-size: 12px;
+}
+
+.ocr-source summary { cursor: pointer; }
+.ocr-source img {
+  display: block;
+  max-width: 100%;
+  max-height: 180px;
+  margin-top: 10px;
+  object-fit: contain;
+  background: #090e16;
+}
+
+.ocr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.ocr-actions .ocr-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+
+.ocr-actions .ocr-primary:hover { filter: brightness(1.08); }
+.ocr-panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.ocr-panel::-webkit-scrollbar { width: 8px; }
+.ocr-panel::-webkit-scrollbar-thumb { background: #425169; border-radius: 8px; }

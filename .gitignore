@@ -6,3 +6,4 @@ sensor/out/
 resources/presentmon/*.exe
 resources/pawnio/*.exe
 .build/
+resources/ocr/

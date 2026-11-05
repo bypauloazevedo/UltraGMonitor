@@ -21,11 +21,15 @@ function format(ms) {
 function paint() {
   const running = state.recording && !state.paused;
   const elapsed = state.elapsed + (running ? Date.now() - syncedAt : 0);
-  time.textContent = format(elapsed);
+  time.textContent = state.finishing ? t('Salvando…') : format(elapsed);
   bar.classList.toggle('paused', state.paused);
   bar.classList.toggle('waiting', !state.recording);
   pause.innerHTML = state.paused ? PLAY : PAUSE;
   pause.title = state.paused ? t('Continuar') : t('Pausar');
+  pause.disabled = state.finishing || !state.recording;
+  document.getElementById('stop').disabled = state.finishing || !state.recording;
+  document.getElementById('cancel').disabled = state.finishing;
+  bar.title = (state.warnings || []).map((message) => t(message)).join('\n');
 }
 
 window.hud.onRecordState((next) => {

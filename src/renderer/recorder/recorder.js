@@ -8,7 +8,8 @@ const MIME_TYPES = [
 ];
 
 let recorder = null;
-let chunks = [];
+let writes = Promise.resolve();
+let pending = 0;
 let streams = [];
 let timer = 0;
 let audioContext = null;
@@ -45,14 +46,19 @@ async function mixAudio(cfg) {
   if (cfg.system) {
     try {
       inputs.push(await systemAudio());
-    } catch {}
+    } catch { window.hud.recorderWarning('O áudio do PC não está sendo gravado'); }
   }
   if (cfg.mic) {
     try {
       inputs.push(await navigator.mediaDevices.getUserMedia({ audio: true, video: false }));
-    } catch {}
+    } catch { window.hud.recorderWarning('O microfone não está sendo gravado'); }
   }
   if (!inputs.length) return null;
+  for (const input of inputs) {
+    for (const track of input.getAudioTracks()) track.addEventListener('ended', () => {
+      if (!cancelled) window.hud.recorderWarning('Uma fonte de áudio foi desconectada');
+    });
+  }
   streams.push(...inputs);
   audioContext = new AudioContext();
   const destination = audioContext.createMediaStreamDestination();
@@ -62,7 +68,8 @@ async function mixAudio(cfg) {
 
 async function start(cfg) {
   cancelled = false;
-  chunks = [];
+  writes = Promise.resolve();
+  pending = 0;
   const screenStream = await desktopVideo(cfg);
   streams.push(screenStream);
   const video = document.createElement('video');
@@ -74,7 +81,9 @@ async function start(cfg) {
   canvas.width = rect.w;
   canvas.height = rect.h;
   const ctx = canvas.getContext('2d', { alpha: false });
-  const draw = () => ctx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  const draw = () => {
+    if (!recorder || recorder.state !== 'paused') ctx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+  };
   draw();
   timer = setInterval(draw, 1000 / 30);
   const output = canvas.captureStream(30);
@@ -82,21 +91,44 @@ async function start(cfg) {
   if (audio) output.addTrack(audio);
   const mimeType = MIME_TYPES.find((t) => MediaRecorder.isTypeSupported(t)) || '';
   recorder = new MediaRecorder(output, { mimeType, videoBitsPerSecond: 6000000 });
+  streams.push(output);
+  await window.hud.recorderOpen(recorder.mimeType || mimeType || 'video/webm');
   recorder.ondataavailable = (e) => {
-    if (e.data && e.data.size) chunks.push(e.data);
+    if (cancelled || !e.data || !e.data.size) return;
+    if (++pending > 4) {
+      fail('O disco não conseguiu acompanhar a gravação');
+      return;
+    }
+    writes = writes.then(async () => {
+      const data = new Uint8Array(await e.data.arrayBuffer());
+      if (!cancelled && !await window.hud.recorderChunk(data)) throw new Error('Não deu pra salvar o vídeo');
+    }).finally(() => { pending--; });
+    writes.catch((err) => fail(err.message));
   };
+  recorder.onerror = (event) => fail(event.error && event.error.message);
   recorder.onstop = async () => {
     clearInterval(timer);
     streams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
     streams = [];
     if (audioContext) audioContext.close();
     if (cancelled) return;
-    const blob = new Blob(chunks, { type: recorder.mimeType || mimeType });
-    const data = new Uint8Array(await blob.arrayBuffer());
-    window.hud.recorderDone(data, recorder.mimeType || mimeType || 'video/webm');
+    try {
+      await writes;
+      if (!cancelled) await window.hud.recorderDone();
+    } catch (err) { fail(err.message); }
   };
   recorder.start(1000);
   window.hud.recorderStarted();
+}
+
+function fail(message) {
+  if (cancelled) return;
+  cancelled = true;
+  clearInterval(timer);
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  streams.forEach((stream) => stream.getTracks().forEach((track) => track.stop()));
+  if (audioContext) audioContext.close();
+  window.hud.recorderError(String(message || 'Não deu pra gravar'));
 }
 
 window.hud.onRecorderCommand(async (cmd) => {
@@ -111,6 +143,6 @@ window.hud.onRecorderCommand(async (cmd) => {
       recorder.stop();
     }
   } catch (err) {
-    window.hud.recorderError(String((err && err.message) || err));
+    fail(String((err && err.message) || err));
   }
 });

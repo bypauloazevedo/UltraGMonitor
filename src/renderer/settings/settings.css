@@ -79,7 +79,7 @@ body {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  opacity: 0.16;
+  opacity: 0.035;
 }
 
 .watermark svg {
@@ -779,4 +779,44 @@ kbd {
   background: var(--scroll);
   border-radius: 99px;
   border: 3px solid var(--bg);
+}
+
+.widget-preview {
+  position: relative;
+  min-height: 80px;
+  overflow: hidden;
+  margin-block: 0.75rem;
+}
+
+.widget-preview iframe {
+  display: block;
+  border: 0;
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.font-grid button {
+  min-height: 60px;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+}
+
+.font-grid button small {
+  font-family: var(--font);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  .switch {
+    transition: none;
+  }
 }

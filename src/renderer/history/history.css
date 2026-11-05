@@ -243,3 +243,16 @@ footer {
   font-size: 11.5px;
   text-align: center;
 }
+
+.history-warning {
+  margin: 0;
+  padding: 10px 14px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--warn) 12%, var(--bg));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.history-warning[hidden] {
+  display: none;
+}

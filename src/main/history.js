@@ -1,27 +1,15 @@
-const fs = require('fs');
 const path = require('path');
 const { BrowserWindow, Menu, clipboard, ClipboardItem, nativeImage, screen, shell } = require('electron');
 const paths = require('./paths');
 const folders = require('./folders');
 const { copyFileToClipboard } = require('./clipfile');
 const { t } = require('../renderer/shared/i18n');
+const { HistoryFiles } = require('./history-files');
 
 const LIMIT = 30;
 const SIZE = { width: 460, height: 560 };
 const IMAGE = /\.(png|jpe?g|webp|bmp)$/i;
 const VIDEO = /\.(mp4|webm|mkv)$/i;
-
-function scan(dir, kind, test) {
-  try {
-    return fs.readdirSync(dir).filter((name) => test.test(name)).map((name) => {
-      const file = path.join(dir, name);
-      const stat = fs.statSync(file);
-      return { file, name, kind, time: stat.mtimeMs, size: stat.size };
-    });
-  } catch {
-    return [];
-  }
-}
 
 async function thumbnail(item) {
   try {
@@ -38,19 +26,23 @@ async function thumbnail(item) {
 }
 
 class History {
-  constructor({ toast, getSettings, pinFile }) {
+  constructor({ toast, getSettings, pinFile, activeRecording = () => null }) {
     this.toast = toast;
     this.getSettings = getSettings;
     this.pinFile = pinFile;
+    this.activeRecording = activeRecording;
     this.win = null;
     this.items = [];
+    this.files = new HistoryFiles(thumbnail, LIMIT);
   }
 
   async list() {
-    const all = [...scan(folders.folder('shots'), 'image', IMAGE), ...scan(folders.folder('videos'), 'video', VIDEO)];
-    all.sort((a, b) => b.time - a.time);
-    this.items = all.slice(0, LIMIT);
-    return Promise.all(this.items.map(async (item) => ({ ...item, thumb: await thumbnail(item) })));
+    const result = await this.files.list([
+      { path: folders.folder('shots'), kind: 'image', pattern: IMAGE },
+      { path: folders.folder('videos'), kind: 'video', pattern: VIDEO },
+    ], [this.activeRecording()]);
+    this.items = result.items;
+    return result;
   }
 
   known(file) {
@@ -123,7 +115,7 @@ class History {
         ok = await copyFileToClipboard(file);
       }
     } catch {}
-    this.hide();
+    if (ok) this.hide();
     if (ok) this.toast.show(`${IMAGE.test(file) ? t('Print copiado') : t('Vídeo copiado')}|${t('Ctrl+V pra colar')}`, 'ok');
     else this.toast.show(t('Não deu pra copiar'), 'error');
     return ok;
@@ -166,15 +158,24 @@ class History {
   }
 
   async trash(file, sender) {
+    if (!this.known(file)) return;
     try {
       await shell.trashItem(file);
-    } catch {}
+    } catch {
+      this.toast.show(t('Não deu pra mover o arquivo pra lixeira'), 'error');
+      return;
+    }
     if (!sender.isDestroyed()) sender.send('history:refresh');
   }
 
-  openFolder(kind) {
-    shell.openPath(folders.ensure(kind));
-    this.hide();
+  async openFolder(kind) {
+    try {
+      const error = await shell.openPath(folders.ensure(kind));
+      if (error) throw new Error(error);
+      this.hide();
+    } catch {
+      this.toast.show(t('Não deu pra abrir a pasta. Confira o acesso nas configurações.'), 'error');
+    }
   }
 }
 

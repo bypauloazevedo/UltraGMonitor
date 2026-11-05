@@ -245,6 +245,12 @@
         <small class="help linux-only">No Ubuntu com Wayland, os atalhos do app só funcionam com ele em foco. Crie um atalho do sistema (Configurações → Teclado → Atalhos personalizados) com o comando "ultragmonitor --capture". Também valem --record e --history.</small>
       </section>
 
+      <section data-tab="aparencia" id="preview-section">
+        <h2>Prévia ao vivo</h2>
+        <div class="widget-preview" id="widget-preview"></div>
+        <small class="help">As mudanças aparecem aqui na hora. A prévia usa as leituras atuais do seu PC.</small>
+      </section>
+
       <section data-tab="aparencia">
         <h2>Tema do programa</h2>
         <div class="segmented" id="theme">
@@ -318,6 +324,7 @@
 
       <section data-tab="aparencia">
         <h2>Fontes</h2>
+        <small class="help">Compare os números que você vai ler no widget.</small>
         <div class="field">
           <span class="label">Relógio, dia e clima <output id="fonts-display-out"></output></span>
           <div class="font-grid" id="fonts-display"></div>
@@ -326,6 +333,7 @@
           <span class="label">Monitor <output id="fonts-metrics-out"></output></span>
           <div class="font-grid" id="fonts-metrics"></div>
         </div>
+        <button class="btn ghost" id="fonts-more" aria-expanded="false">Ver todas as fontes</button>
       </section>
 
       <section data-tab="aparencia">
@@ -358,6 +366,7 @@
     <script src="../shared/fonts.js"></script>
     <script src="../shared/theme.js"></script>
     <script src="../shared/hardware.js"></script>
+    <script src="../shared/sensor-state.js"></script>
     <script src="settings.js"></script>
   </body>
 </html>
