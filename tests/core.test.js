@@ -444,6 +444,11 @@ test('Falha da captura preserva o foco das configurações sem ativar o app sobr
   fixture.capture.win.destroy = () => fixture.foreground(null);
   fixture.capture.fail({});
   assert.deepEqual(fixture.calls, ['after', 'error', 'focus']);
+  const cached = captureFixture();
+  cached.capture.busy = true;
+  cached.focus(false);
+  cached.capture.fail({});
+  assert.deepEqual(cached.calls, ['after', 'error', 'focus']);
   const game = captureFixture();
   game.capture.busy = true;
   game.capture.returnFocus = game.previous;
@@ -480,7 +485,7 @@ test('Captura que excede o tempo libera a tela e ignora o carregamento atrasado'
   finishLoading();
   await pending;
   assert.equal(sent.includes('capture:start'), false);
-  assert.deepEqual(calls, ['after', 'focus', 'error']);
+  assert.deepEqual(calls, ['after', 'error', 'focus']);
 });
 
 test('Cancelar enquanto o print está sendo obtido não reabre a captura depois', async () => {

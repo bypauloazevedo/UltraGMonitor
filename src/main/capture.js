@@ -207,10 +207,10 @@ class Capture {
     const windows = new Set([this.win, ...Array.from(this.windows.values(), target => target.win)]);
     const focused = BrowserWindow.getFocusedWindow();
     const returnFocus = windows.has(focused) ? this.returnFocus : focused;
-    this.close();
+    this.close(false);
     for (const win of windows) if (win && !win.isDestroyed()) win.destroy();
     this.toast.show(t('Não deu pra capturar a tela. Tente de novo.'), 'error', display);
-    if (!this.quitting && returnFocus && !returnFocus.isDestroyed() && returnFocus.isVisible() && BrowserWindow.getFocusedWindow() !== returnFocus) {
+    if (!this.quitting && returnFocus && !returnFocus.isDestroyed() && returnFocus.isVisible()) {
       returnFocus.focus();
       returnFocus.webContents.focus();
     }
@@ -275,7 +275,7 @@ class Capture {
     this.shot = null;
   }
 
-  close() {
+  close(restoreFocus = true) {
     const wasBusy = this.busy;
     const returnFocus = this.returnFocus;
     const windows = new Set([this.win, ...Array.from(this.windows.values(), target => target.win)]);
@@ -299,7 +299,7 @@ class Capture {
     }
     this.targets = [];
     this.afterShot();
-    if (focused && !this.quitting && returnFocus && !returnFocus.isDestroyed() && returnFocus.isVisible()) {
+    if (restoreFocus && focused && !this.quitting && returnFocus && !returnFocus.isDestroyed() && returnFocus.isVisible()) {
       returnFocus.focus();
       returnFocus.webContents.focus();
     }
