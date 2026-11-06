@@ -78,7 +78,7 @@ app.whenReady().then(async () => {
       contents.sendInputEvent({ type: 'mouseDown', x: 30, y: 40, button: 'left', clickCount: 1 });
       contents.sendInputEvent({ type: 'mouseMove', x: 180, y: 140, button: 'left' });
       contents.sendInputEvent({ type: 'mouseUp', x: 180, y: 140, button: 'left', clickCount: 1 });
-      await until(() => toolbarAt(id), 'A barra não acompanhou a seleção com exclusividade');
+      await until(async () => await toolbarAt(id) && await jsAt(id, '!!sel && sel.w > 2 && sel.h > 2 && drag === null && !bar.querySelector(mode === "video" ? "[data-act=record]" : "[data-act=copy]").disabled'), 'A barra não acompanhou a seleção com exclusividade');
     };
     for (const id of [2, 3, 1, 2]) {
       copied = null;
