@@ -28,6 +28,8 @@ jobs:
 
       - run: npm run build:sensor
 
+      - run: npm run build:keyboard
+
       - run: npm test
 
       - run: npm run test:ui
@@ -43,6 +45,7 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "instalador saiu com $($install.ExitCode)" }
           $exe = Join-Path $env:ProgramFiles 'UltraGMonitor\UltraGMonitor.exe'
           if (-not (Test-Path $exe)) { throw "app não foi instalado em $exe" }
+          if (-not (Test-Path (Join-Path $env:ProgramFiles 'UltraGMonitor\resources\keyboard\UltraGMonitor.Keys.exe'))) { throw 'ajudante do atalho ausente no instalador' }
           $ocr = Join-Path $env:ProgramFiles 'UltraGMonitor\resources\ocr'
           foreach ($file in @('worker.cjs', 'ocr-image.js', 'ocr-result.js', 'languages\por.traineddata.gz', 'languages\eng.traineddata.gz', 'languages\spa.traineddata.gz', 'node_modules\pngjs\lib\png.js', 'node_modules\tesseract.js\src\index.js')) {
             if (-not (Test-Path (Join-Path $ocr $file))) { throw "arquivo de reconhecimento ausente no instalador: $file" }

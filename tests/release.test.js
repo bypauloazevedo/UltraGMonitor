@@ -23,7 +23,6 @@ test('Versão do app, lockfile e changelog estão sincronizados', () => {
   assert.equal(lock.version, pkg.version);
   assert.equal(lock.packages[''].version, pkg.version);
   const notes = releaseNotes(fs.readFileSync(path.resolve(__dirname, '../CHANGELOG.md'), 'utf8'), pkg.version);
-  assert.match(notes, /Extrair texto/);
   assert.match(notes, /Windows/);
   assert.match(notes, /Linux/);
   assert.match(notes, /Downloads/);

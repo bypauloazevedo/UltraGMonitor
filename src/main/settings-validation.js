@@ -5,7 +5,7 @@ const ENUMS = {
   cardLayout: ['grid', 'list', 'tall'], compactLayout: ['list', 'tall'], layoutBeforeDock: ['card', 'compact', 'bar'],
   hwNames: ['label', 'name', 'model'], hwNamesStrip: ['label', 'name', 'model'],
 };
-const BOOLEAN = new Set(['updateCheck', 'monitoring', 'captureWinShiftS', 'autoSaveShots', 'hoverFade', 'captureCloseOnCopy', 'recordSystemAudio', 'recordMic', 'fpsEnabled', 'clock24h', 'showSeconds', 'adminSensors', 'locked', 'hidden', 'startWithWindows']);
+const BOOLEAN = new Set(['updateCheck', 'monitoring', 'captureWinShiftS', 'autoSaveShots', 'hoverFade', 'captureCloseOnCopy', 'recordSystemAudio', 'recordMic', 'fpsEnabled', 'clock24h', 'showSeconds', 'adminSensors', 'locked', 'hidden', 'startWithWindows', 'historyMaximized']);
 const plain = (value) => value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 const string = (value, max = 500) => typeof value === 'string' && value.length <= max && !value.includes('\0');
 const color = (value) => typeof value === 'string' && /^#[\da-f]{6}$/i.test(value);
@@ -55,10 +55,11 @@ function sanitize(patch) {
       else if (plain(value) && string(value.name) && clamp(value.latitude, -90, 90) === value.latitude && clamp(value.longitude, -180, 180) === value.longitude && Number.isFinite(value.latitude) && Number.isFinite(value.longitude)) {
         next.city = { name: value.name, latitude: value.latitude, longitude: value.longitude, admin1: string(value.admin1) ? value.admin1 : '', country: string(value.country) ? value.country : '' };
       }
-    } else if (['position', 'dock', 'settingsBounds'].includes(key)) {
+    } else if (['position', 'dock', 'settingsBounds', 'historyBounds'].includes(key)) {
       if (value === null) { next[key] = null; continue; }
       if (!plain(value)) continue;
-      const fields = key === 'settingsBounds' ? ['x', 'y', 'width', 'height'] : key === 'dock' ? ['displayId', 'offsetX'] : ['displayId', 'offsetX', 'offsetY'];
+      const windowBounds = key === 'settingsBounds' || key === 'historyBounds';
+      const fields = windowBounds ? ['x', 'y', 'width', 'height'] : key === 'dock' ? ['displayId', 'offsetX'] : ['displayId', 'offsetX', 'offsetY'];
       if (!fields.every((name) => Number.isFinite(value[name]))) continue;
       const item = Object.fromEntries(fields.map((name) => [name, Math.round(value[name])]));
       if (key === 'position') {
@@ -66,8 +67,8 @@ function sanitize(patch) {
         item.anchorY = value.anchorY === 'bottom' ? 'bottom' : 'top';
         item.offsetX = Math.max(0, item.offsetX); item.offsetY = Math.max(0, item.offsetY);
       }
-      if (key === 'settingsBounds') {
-        item.width = Math.max(420, Math.min(10000, item.width)); item.height = Math.max(520, Math.min(10000, item.height));
+      if (windowBounds) {
+        item.width = Math.max(key === 'historyBounds' ? 460 : 420, Math.min(10000, item.width)); item.height = Math.max(key === 'historyBounds' ? 360 : 520, Math.min(10000, item.height));
       }
       next[key] = item;
     }

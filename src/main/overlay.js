@@ -30,6 +30,7 @@ class Overlay {
     this.timers = [];
     this.placing = false;
     this.autoHidden = false;
+    this.capturing = false;
     this.hoverSince = 0;
     this.peeking = false;
     this.ticks = 0;
@@ -211,12 +212,15 @@ class Overlay {
   setIgnore(ignore) {
     if (!this.alive() || this.ignoring === ignore) return;
     this.ignoring = ignore;
+    this.win.setFocusable(!ignore);
     this.win.setIgnoreMouseEvents(ignore);
   }
 
   applyLock() {
-    this.setIgnore(this.settings.get().locked);
-    if (!this.settings.get().locked) this.setHandle(false);
+    if (!this.alive()) return;
+    const locked = this.settings.get().locked;
+    this.setIgnore(locked || this.capturing);
+    if (!locked) this.setHandle(false);
   }
 
   setHandleRect(rect) {
@@ -241,7 +245,18 @@ class Overlay {
     }
   }
 
+  setCapturing(active) {
+    this.capturing = active === true;
+    if (this.capturing) {
+      this.setPeek(false);
+      this.setHandle(false);
+    }
+    this.applyLock();
+    if (!this.capturing) this.refreshVisibility();
+  }
+
   setFullscreen(info) {
+    if (this.capturing) return;
     let hide = false;
     if (this.isDock() && info && info.active) {
       const point = screen.screenToDipPoint({ x: info.x, y: info.y });
@@ -253,7 +268,7 @@ class Overlay {
   }
 
   keepOnTop() {
-    if (!this.alive() || !this.win.isVisible()) return;
+    if (!this.alive() || !this.win.isVisible() || this.capturing) return;
     this.ticks += 1;
     if (this.isDock()) {
       this.win.setAlwaysOnTop(true, 'screen-saver');
@@ -265,7 +280,7 @@ class Overlay {
 
   tickPointer() {
     const s = this.settings.get();
-    if (!this.alive() || !this.win.isVisible() || !s.locked) {
+    if (!this.alive() || !this.win.isVisible() || !s.locked || this.capturing) {
       this.enterAt = 0;
       this.hoverSince = 0;
       this.setPeek(false);

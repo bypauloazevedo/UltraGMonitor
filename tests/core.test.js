@@ -80,6 +80,68 @@ test('Configurações limitam valores, rejeitam tipos e bloqueiam chaves estranh
   assert.deepEqual(sanitize(input), { scale: 3, opacity: 0, modules: { cpu: false } });
   assert.equal({}.poluido, undefined);
   assert.deepEqual(sanitize({ typography: { clock: { size: -1, font: 'inexistente' } }, background: { file: '../fora.png' } }), { typography: { clock: { size: 0.6 } }, background: {} });
+  assert.deepEqual(sanitize({ historyBounds: { x: 120, y: 80, width: 900, height: 700 }, historyMaximized: true }), { historyBounds: { x: 120, y: 80, width: 900, height: 700 }, historyMaximized: true });
+  assert.deepEqual(sanitize({ historyBounds: { x: 0, y: 0, width: 1, height: 20000 } }), { historyBounds: { x: 0, y: 0, width: 460, height: 10000 } });
+  assert.deepEqual(sanitize({ historyBounds: { x: 'fora', y: 0, width: 900, height: 700 }, historyMaximized: 'sim' }), {});
+});
+
+function historyFixture(values = {}, area = { x: 0, y: 0, width: 1920, height: 1080 }) {
+  const created = [];
+  class Window extends EventEmitter {
+    constructor(options) {
+      super();
+      this.options = options;
+      this.bounds = Object.fromEntries(['x', 'y', 'width', 'height'].map(key => [key, options[key]]));
+      this.webContents = { send() {} };
+      this.maximized = false;
+      created.push(this);
+    }
+    isDestroyed() { return false; }
+    isMinimized() { return false; }
+    isMaximized() { return this.maximized; }
+    getNormalBounds() { return { ...this.bounds }; }
+    loadFile() {}
+    show() {}
+    focus() {}
+    hide() { this.emit('hide'); }
+    maximize() { this.maximized = true; this.emit('maximize'); }
+  }
+  const { History } = load('src/main/history.js', { electron: {
+    BrowserWindow: Window,
+    screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => ({ workArea: area }), getDisplayMatching: () => ({ workArea: area }) },
+  } });
+  const options = { toast: {}, getSettings: () => values, saveSettings: patch => Object.assign(values, sanitize(patch)), pinFile() {} };
+  return { history: new History(options), reopen: () => new History(options), created, values };
+}
+
+test('Últimos prints guarda expansão, posição e maximização entre aberturas', () => {
+  const { history, reopen, created, values } = historyFixture();
+  history.open();
+  const first = created[0];
+  assert.equal(first.options.resizable, true);
+  assert.equal(first.options.maximizable, true);
+  first.bounds = { x: 120, y: 80, width: 1020, height: 760 };
+  first.emit('resize');
+  first.hide();
+  history.open();
+  assert.equal(created.length, 1);
+  assert.deepEqual(values.historyBounds, first.bounds);
+  const next = reopen();
+  next.open();
+  assert.deepEqual(created[1].bounds, first.bounds);
+  first.maximize();
+  assert.equal(values.historyMaximized, true);
+  const restored = reopen();
+  restored.open();
+  created[2].emit('ready-to-show');
+  assert.equal(created[2].isMaximized(), true);
+  assert.deepEqual(values.historyBounds, first.bounds);
+});
+
+test('Últimos prints volta para a área visível quando a tela salva não existe mais', () => {
+  const { history, created } = historyFixture({ historyBounds: { x: -5000, y: 3000, width: 3000, height: 2000 } }, { x: 0, y: 0, width: 1280, height: 720 });
+  history.open();
+  assert.deepEqual(created[0].bounds, { x: 0, y: 0, width: 1280, height: 720 });
 });
 
 test('Configurações são gravadas inteiras e recuperadas do backup se houver corrupção', (t) => {
@@ -346,4 +408,308 @@ test('Cópia do texto valida o conteúdo e confirma o que ficou na área de tran
   fails = true;
   assert.equal(await capture.copyText('Novo texto'), false);
   assert.equal(text, 'Texto revisado\ncom acentuação');
+});
+
+function captureFixture(displays = [{ id: 1, bounds: { x: 0, y: 0, width: 640, height: 360 }, size: { width: 640, height: 360 }, scaleFactor: 1 }]) {
+  const shortcuts = new Set(['PrintScreen']);
+  const timers = new Map();
+  const sent = [];
+  const calls = [];
+  let id = 0;
+  let focused = true;
+  const previous = { isDestroyed: () => false, isVisible: () => true, focus: () => calls.push('focus'), webContents: { focus() {} } };
+  const { Capture } = load('src/main/capture.js', { electron: {
+    app: { on() {} }, BrowserWindow: { getFocusedWindow: () => previous },
+    screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => displays[0], getAllDisplays: () => displays },
+    globalShortcut: { isRegistered: (key) => shortcuts.has(key), register: (key) => { shortcuts.add(key); return true; }, unregister: (key) => shortcuts.delete(key) },
+  } }, { setTimeout: (fn, ms) => { timers.set(++id, { fn, ms }); return id; }, clearTimeout: (timer) => timers.delete(timer) });
+  const capture = new Capture({ sensors: {}, getSettings: () => ({}), toast: { show: () => calls.push('error') }, beforeShot: () => calls.push('before'), afterShot: () => calls.push('after') });
+  for (const display of displays) {
+    let destroyed = false;
+    let visible = false;
+    const win = { isDestroyed: () => destroyed, isVisible: () => visible, isFocused: () => focused, destroy: () => { destroyed = true; }, setBounds: bounds => { win.bounds = bounds; }, showInactive: () => { visible = true; }, hide: () => { visible = false; }, moveTop() {}, focus() {}, webContents: { send: (channel) => sent.push(channel), focus() {} } };
+    capture.windows.set(display.id, { win, display, ready: false, shot: null, keysEnabled: true });
+  }
+  capture.targets = Array.from(capture.windows.values());
+  capture.win = capture.targets[0].win;
+  capture.warm = () => Promise.resolve();
+  return { capture, shortcuts, timers, sent, calls, focus: (value) => { focused = value; } };
+}
+
+test('Atalhos da captura só atuam com a janela focada e respeitam a edição de texto', () => {
+  const { capture, shortcuts, focus } = captureFixture();
+  capture.busy = true;
+  capture.setKeysEnabled(true);
+  assert.equal(shortcuts.has('CommandOrControl+C'), true);
+  capture.releaseKeys();
+  focus(false);
+  capture.holdKeys();
+  assert.deepEqual([...shortcuts], ['PrintScreen']);
+  focus(true);
+  capture.holdKeys();
+  capture.setKeysEnabled(false);
+  capture.holdKeys();
+  assert.deepEqual([...shortcuts], ['PrintScreen']);
+});
+
+test('Captura que excede o tempo libera a tela e ignora o carregamento atrasado', async () => {
+  const { capture, timers, sent, calls } = captureFixture();
+  let finishLoading;
+  capture.warm = () => new Promise((resolve) => { finishLoading = resolve; });
+  const pending = capture.start();
+  [...timers.values()].find((timer) => timer.ms === 10000).fn();
+  assert.equal(capture.busy, false);
+  assert.equal(capture.win.isDestroyed(), true);
+  finishLoading();
+  await pending;
+  assert.equal(sent.includes('capture:start'), false);
+  assert.deepEqual(calls, ['after', 'focus', 'error']);
+});
+
+test('Cancelar enquanto o print está sendo obtido não reabre a captura depois', async () => {
+  const { capture, timers, sent, calls } = captureFixture();
+  let finishShot;
+  capture.grab = () => new Promise((resolve) => { finishShot = resolve; });
+  const pending = capture.start();
+  await Promise.resolve();
+  const [id, timer] = [...timers].find(([, entry]) => entry.ms === 50);
+  timers.delete(id);
+  timer.fn();
+  await Promise.resolve();
+  assert.equal(typeof finishShot, 'function');
+  capture.close();
+  finishShot({ pixels: new Uint8Array(4), width: 1, height: 1 });
+  await pending;
+  assert.equal(capture.busy, false);
+  assert.equal(capture.shot, null);
+  assert.equal(sent.includes('capture:start'), false);
+  assert.deepEqual(calls, ['before', 'after', 'focus']);
+});
+
+test('Quadro atrasado de uma captura anterior não exibe a próxima janela', () => {
+  const { capture } = captureFixture();
+  const shown = [];
+  capture.busy = true;
+  capture.session = 4;
+  capture.display = { bounds: { width: 640, height: 360 } };
+  capture.shot = { width: 640, height: 360 };
+  capture.win.showInactive = () => shown.push('show');
+  capture.win.moveTop = () => {};
+  capture.win.focus = () => {};
+  capture.ready(2);
+  assert.equal(shown.length, 0);
+  assert.notEqual(capture.shot, null);
+  capture.ready(4);
+  assert.deepEqual(shown, ['show']);
+  assert.equal(capture.shot, null);
+});
+
+test('Captura mantém o painel visível sem disputar os cliques e a posição das janelas', () => {
+  const { Overlay } = load('src/main/overlay.js', { electron: {} });
+  const values = { locked: false, hidden: false, monitoring: true, layout: 'dock' };
+  const overlay = new Overlay({ get: () => values }, {});
+  const calls = [];
+  let visible = true;
+  overlay.win = { isDestroyed: () => false, isVisible: () => visible, setFocusable() {}, setIgnoreMouseEvents: (ignore) => calls.push(ignore), setAlwaysOnTop: () => calls.push('top'), moveTop: () => calls.push('move'), hide: () => { visible = false; }, showInactive: () => { visible = true; } };
+  overlay.setCapturing(true);
+  overlay.keepOnTop();
+  overlay.setFullscreen({ active: true });
+  assert.equal(visible, true);
+  assert.equal(overlay.autoHidden, false);
+  assert.deepEqual(calls, [true]);
+  overlay.setCapturing(false);
+  assert.equal(visible, true);
+  assert.equal(calls.includes(false), true);
+  values.hidden = true;
+  overlay.setCapturing(true);
+  overlay.setCapturing(false);
+  assert.equal(visible, false);
+});
+
+test('Menu aberto recupera a interação depois da captura sem receber foco automaticamente', () => {
+  const { Overlay } = load('src/main/overlay.js', { electron: {} });
+  const values = { locked: false, hidden: false, monitoring: true };
+  const overlay = new Overlay({ get: () => values }, {});
+  let focusable;
+  let ignoring;
+  overlay.win = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    setFocusable: (value) => { focusable = value; },
+    setIgnoreMouseEvents: (value) => { ignoring = value; },
+    setAlwaysOnTop() {},
+  };
+  for (let i = 0; i < 3; i++) {
+    overlay.applyLock();
+    assert.equal(focusable, true);
+    assert.equal(ignoring, false);
+    overlay.setCapturing(true);
+    assert.equal(focusable, false);
+    assert.equal(ignoring, true);
+    overlay.applyLock();
+    assert.equal(focusable, false);
+    assert.equal(ignoring, true);
+    overlay.setCapturing(false);
+    assert.equal(values.locked, false);
+    assert.equal(focusable, true);
+    assert.equal(ignoring, false);
+    values.locked = true;
+    overlay.applyLock();
+    assert.equal(focusable, false);
+    assert.equal(ignoring, true);
+    values.locked = false;
+  }
+});
+
+test('Setinha de abrir o menu recupera cliques após cancelar capturas repetidas', () => {
+  let cursor = { x: 12, y: 12 };
+  const { Overlay } = load('src/main/overlay.js', { electron: { screen: { getCursorScreenPoint: () => cursor } } });
+  const overlay = new Overlay({ get: () => ({ locked: true, hidden: false, monitoring: true }) }, {});
+  let focusable;
+  let ignoring;
+  overlay.win = {
+    isDestroyed: () => false,
+    isVisible: () => true,
+    getBounds: () => ({ x: 0, y: 0, width: 224, height: 300 }),
+    setFocusable: (value) => { focusable = value; },
+    setIgnoreMouseEvents: (value) => { ignoring = value; },
+    setAlwaysOnTop() {},
+    webContents: { send() {} },
+  };
+  overlay.setHandleRect({ x: 0, y: 0, width: 28, height: 28 });
+  for (let i = 0; i < 5; i++) {
+    overlay.setCapturing(true);
+    overlay.setCapturing(false);
+    assert.equal(focusable, false);
+    assert.equal(ignoring, true);
+    cursor = { x: 12, y: 12 };
+    overlay.enterAt = Date.now() - 300;
+    overlay.tickPointer();
+    assert.equal(overlay.handleShown, true);
+    assert.equal(focusable, true);
+    assert.equal(ignoring, false);
+    cursor = { x: 500, y: 500 };
+    overlay.tickPointer();
+    assert.equal(focusable, false);
+    assert.equal(ignoring, true);
+  }
+});
+
+test('Win+Shift+S e Ctrl+Win+Shift+S são reconhecidos pelo código nativo sem digitar no Windows', { skip: process.platform !== 'win32' }, (t) => {
+  const { execFileSync } = require('node:child_process');
+  const output = temporary(t);
+  const executable = path.join(output, 'atalho.exe');
+  const compiler = ['Framework64', 'Framework'].map(folder => path.join(process.env.WINDIR, 'Microsoft.NET', folder, 'v4.0.30319', 'csc.exe')).find(file => fs.existsSync(file));
+  assert.ok(compiler, 'Compilador do .NET Framework não encontrado');
+  execFileSync(compiler, ['/nologo', '/target:exe', `/out:${executable}`, path.resolve(__dirname, '../keyboard/CaptureChord.cs'), path.resolve(__dirname, 'shortcut-state.cs')], { windowsHide: true });
+  assert.match(execFileSync(executable, [], { encoding: 'utf8', windowsHide: true }), /Combinações e repetição verificadas/);
+});
+
+test('Ajudante do atalho acompanha a instalação e se recupera além do limite dos sensores', () => {
+  const scheduled = new Map();
+  const intervals = [];
+  let timer = 0;
+  const { Sensors } = load('src/main/sensors.js', { child_process: {}, fs: {} }, {
+    setTimeout: (fn, delay) => { scheduled.set(++timer, { fn, delay }); return timer; }, clearTimeout: id => scheduled.delete(id),
+    setInterval: fn => { intervals.push(fn); return intervals.length; }, clearInterval() {},
+  });
+  const worker = new Sensors({ exe: 'teclado.exe', keyboardOnly: true });
+  worker.hook = true;
+  const commands = [];
+  const socket = new EventEmitter();
+  socket.destroyed = false;
+  socket.write = line => commands.push(line.trim());
+  socket.setEncoding = () => {};
+  socket.destroy = () => { socket.destroyed = true; socket.emit('close'); };
+  worker.onConnection(socket);
+  assert.deepEqual(commands, ['hook on']);
+  socket.emit('data', '{"type":"hook","active":true,"error":0}\n');
+  assert.equal(worker.status.hookActive, true);
+  let pressed;
+  worker.on('key', key => { pressed = key; });
+  socket.emit('data', '{"type":"key","name":"capture"}\n');
+  assert.equal(pressed, 'capture');
+  worker.setHook(false);
+  worker.lastReading = 0;
+  intervals[0]();
+  assert.equal(socket.destroyed, false, 'Editar um atalho não deve reiniciar o ajudante em pausa');
+  worker.setHook(true);
+  worker.crashes = 20;
+  worker.lastReading = 0;
+  intervals[0]();
+  assert.equal(socket.destroyed, true);
+  assert.equal(worker.status.hookActive, false);
+  assert.equal(worker.status.starting, true);
+  assert.equal(worker.status.failed, false);
+  assert.equal(scheduled.get(worker.restartTimer).delay, 10000);
+  worker.stop();
+  assert.equal(scheduled.size, 0);
+});
+
+test('Ajudante nativo conecta e encerra pelo pipe sem sensores, janela ou interceptação de teclas', { skip: process.platform !== 'win32' }, async (t) => {
+  const { execFileSync } = require('node:child_process');
+  const { Sensors } = require('../src/main/sensors');
+  const output = temporary(t);
+  const executable = path.join(output, 'teclado.exe');
+  const compiler = ['Framework64', 'Framework'].map(folder => path.join(process.env.WINDIR, 'Microsoft.NET', folder, 'v4.0.30319', 'csc.exe')).find(file => fs.existsSync(file));
+  execFileSync(compiler, ['/nologo', '/target:winexe', `/out:${executable}`, ...['Program.cs', 'KeyHook.cs', 'CaptureChord.cs'].map(file => path.resolve(__dirname, '../keyboard', file))], { windowsHide: true });
+  const worker = new Sensors({ exe: executable, keyboardOnly: true });
+  t.after(() => worker.stop());
+  await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('O ajudante não confirmou a conexão')), 5000);
+    worker.on('status', status => {
+      if (status.running && status.hookActive === false && status.hookError === 0) { clearTimeout(timeout); resolve(); }
+    });
+    worker.start({ elevated: false, fps: false });
+  });
+  const child = worker.child;
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  worker.stop();
+  await exited;
+  assert.equal(worker.socket, null);
+});
+
+test('Captura prepara todos os monitores e encaminha a imagem e a região da tela escolhida', async () => {
+  const displays = [
+    { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, size: { width: 1920, height: 1080 }, scaleFactor: 1 },
+    { id: 2, bounds: { x: -1280, y: -100, width: 1280, height: 720 }, size: { width: 1280, height: 720 }, scaleFactor: 1.5 },
+  ];
+  const { capture, timers } = captureFixture(displays);
+  capture.grab = async display => ({ pixels: Buffer.from([display.id]), width: display.bounds.width * display.scaleFactor, height: display.bounds.height * display.scaleFactor, format: 'rgba' });
+  const pending = capture.start();
+  await Promise.resolve();
+  [...timers.values()].find(entry => entry.ms === 50).fn();
+  await pending;
+  const [primary, secondary] = capture.targets;
+  assert.equal(capture.image(primary.win.webContents).pixels[0], 1);
+  assert.equal(capture.image(secondary.win.webContents).pixels[0], 2);
+  assert.equal(capture.image(secondary.win.webContents).width / capture.image(secondary.win.webContents).cssWidth, 1.5);
+  capture.ready(capture.session, primary.win.webContents);
+  assert.equal(primary.win.isVisible(), false);
+  assert.equal(secondary.win.isVisible(), false);
+  capture.ready(capture.session, secondary.win.webContents);
+  assert.equal(primary.win.isVisible(), true);
+  assert.equal(secondary.win.isVisible(), true);
+  assert.deepEqual(secondary.win.bounds, displays[1].bounds);
+  assert.equal(capture.use(secondary.win.webContents), true);
+  assert.equal(capture.display.id, 2);
+  assert.deepEqual(capture.region(), displays[1]);
+  assert.equal(primary.win.isVisible(), false);
+  assert.equal(secondary.win.isVisible(), false);
+  assert.equal(capture.owns(secondary.win.webContents), false);
+});
+
+test('Alternativa de captura procura o monitor pelo identificador e não troca pelo principal', async () => {
+  const primary = { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, size: { width: 1920, height: 1080 }, scaleFactor: 1 };
+  const secondary = { id: 2, bounds: { x: -1280, y: 0, width: 1280, height: 720 }, size: { width: 1280, height: 720 }, scaleFactor: 1.5 };
+  const image = id => ({ display_id: String(id), thumbnail: { toBitmap: () => Buffer.from([id]), getSize: () => ({ width: 1920, height: 1080 }) } });
+  let sources = [image(1), image(2)];
+  const { Capture } = load('src/main/capture.js', { fs: { unlinkSync() {} }, electron: {
+    app: { on() {} }, screen: { getAllDisplays: () => [primary, secondary], dipToScreenRect: () => { throw new Error('Sem ajudante'); } },
+    desktopCapturer: { getSources: async () => sources },
+  } });
+  const capture = new Capture({ sensors: {}, toast: {}, getSettings: () => ({}), beforeShot() {}, afterShot() {} });
+  assert.equal((await capture.grab(secondary)).pixels[0], 2);
+  sources = [image(1)];
+  await assert.rejects(capture.grab(secondary), /nenhuma tela encontrada/);
 });

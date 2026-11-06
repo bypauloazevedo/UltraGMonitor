@@ -184,7 +184,9 @@ function row(key) {
   const icon = SECOND_ICONS[key];
   const name = key === 'fps' ? '<span class="lbl">FPS</span>' : label(key);
   const v2 = `<span class="v2" data-k="${key}.mini2box" hidden>${icon ? `<span class="ico">${icon}</span>` : ''}${stable(ph2, `${key}.mini2`)}</span>`;
-  return `<div class="row${key === 'fps' ? ' is-fps' : ''}" data-k="${key}.tone"><span class="k"><span class="ico">${key === 'fps' ? ui.fps : ui[key]}</span>${name}</span><span class="v">${stable(ph, `${key}.mini`, true)}</span>${v2}</div>`;
+  const values = `<span class="v">${stable(ph, `${key}.mini`, true)}</span>${v2}`;
+  const readings = settings.layout === 'compact' ? `<span class="readings">${values}</span>` : values;
+  return `<div class="row${key === 'fps' ? ' is-fps' : ''}" data-k="${key}.tone"><span class="k"><span class="ico">${key === 'fps' ? ui.fps : ui[key]}</span>${name}</span>${readings}</div>`;
 }
 
 function buildMini() {
@@ -200,7 +202,7 @@ function buildMini() {
   for (const key of metricKeys()) metrics.push(row(key));
   const foot = [time, day, wx].filter(Boolean).join('');
   const footHtml = foot ? `<div class="foot">${foot}</div>` : '';
-  const items = isBar ? [footHtml, ...metrics] : [...metrics, footHtml];
+  const items = [footHtml, ...metrics];
   const html = items.filter(Boolean).join('') || '<div class="row"><span class="k">UltraG</span></div>';
   return `<div class="${surfaceClass(isBar ? 'mini bar' : `mini compact-${compactLayout()}`)}">${media()}${html}${grip()}</div>`;
 }
@@ -717,7 +719,6 @@ async function init() {
 
   window.hud.onSettings((next) => {
     settings = next;
-    if (document.visibilityState === 'hidden' || document.body.hidden) return;
     applyTheme();
     build();
     syncToolbar();

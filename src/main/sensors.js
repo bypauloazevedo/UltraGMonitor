@@ -18,10 +18,11 @@ function psQuote(value) {
 }
 
 class Sensors extends EventEmitter {
-  constructor({ exe, presentMon }) {
+  constructor({ exe, presentMon, keyboardOnly = false }) {
     super();
     this.exe = exe;
     this.presentMon = presentMon;
+    this.keyboardOnly = keyboardOnly;
     this.server = null;
     this.socket = null;
     this.child = null;
@@ -38,7 +39,7 @@ class Sensors extends EventEmitter {
     this.lastReading = 0;
     this.readings = 0;
     this.generation = 0;
-    this.electronAdmin = processIsAdmin();
+    this.electronAdmin = keyboardOnly ? false : processIsAdmin();
     this.status = { running: false, elevated: false, elevationDenied: false, missing: false };
   }
 
@@ -54,7 +55,7 @@ class Sensors extends EventEmitter {
     this.fps = fps;
     this.elevatedRequested = !!elevated;
     this.readings = 0;
-    this.setStatus({ running: false, starting: true, missing: false, failed: false });
+    this.setStatus({ running: false, starting: true, missing: false, failed: false, ...(this.keyboardOnly ? { hookActive: false } : {}) });
     if (!fs.existsSync(this.exe)) {
       this.setStatus({ running: false, starting: false, missing: true });
       return;
@@ -68,7 +69,8 @@ class Sensors extends EventEmitter {
     });
     server.listen(`\\\\.\\pipe\\${name}`, () => {
       if (this.server !== server || this.stopping) return;
-      const args = ['--pipe', name, '--presentmon', this.presentMon];
+      const args = ['--pipe', name];
+      if (!this.keyboardOnly) args.push('--presentmon', this.presentMon);
       if (fps) args.push('--fps');
       if (elevated && !this.electronAdmin) this.launchElevated(args);
       else this.launchDirect(args);
@@ -87,7 +89,9 @@ class Sensors extends EventEmitter {
       if (this.child === child && !this.stopping) this.scheduleRestart();
     });
     child.on('exit', () => {
-      if (this.child === child) this.child = null;
+      if (this.child !== child) return;
+      this.child = null;
+      if (this.keyboardOnly && !this.stopping) this.scheduleRestart();
     });
   }
 
@@ -125,13 +129,14 @@ class Sensors extends EventEmitter {
     this.setStatus({ running: true, starting: false, missing: false });
     clearInterval(this.watchdog);
     this.watchdog = setInterval(() => {
-      if (this.monitoring && Date.now() - this.lastReading > 8000) socket.destroy();
+      if ((this.keyboardOnly ? this.hook : this.monitoring) && Date.now() - this.lastReading > 8000) socket.destroy();
     }, 2000);
-    this.send(`monitor ${this.monitoring ? 'on' : 'off'}`);
+    if (!this.keyboardOnly) this.send(`monitor ${this.monitoring ? 'on' : 'off'}`);
     this.send(`hook ${this.hook ? 'on' : 'off'}`);
     socket.setEncoding('utf8');
     let buffer = '';
     socket.on('data', (chunk) => {
+      if (this.socket !== socket || this.stopping) return;
       buffer += chunk;
       if (buffer.length > 4 * 1024 * 1024) { socket.destroy(); return; }
       let index;
@@ -152,6 +157,12 @@ class Sensors extends EventEmitter {
               this.shots.delete(data.id);
               pending(data);
             }
+          } else if (data.type === 'hook' && this.keyboardOnly) {
+            this.lastReading = Date.now();
+            if (data.active && ++this.readings >= 10) this.crashes = 0;
+            const hookActive = data.active === true;
+            const hookError = data.error || 0;
+            if (hookActive !== this.status.hookActive || hookError !== this.status.hookError) this.setStatus({ hookActive, hookError });
           } else if (data.type === 'key') {
             this.emit('key', data.name);
           } else if (data.type === 'error') {
@@ -166,7 +177,7 @@ class Sensors extends EventEmitter {
     socket.on('close', () => {
       if (this.socket !== socket) return;
       this.socket = null;
-      this.setStatus({ running: false });
+      this.setStatus({ running: false, ...(this.keyboardOnly ? { hookActive: false } : {}) });
       if (!this.stopping) this.scheduleRestart();
     });
   }
@@ -176,12 +187,13 @@ class Sensors extends EventEmitter {
     clearTimeout(this.connectionTimer);
     clearInterval(this.watchdog);
     this.crashes += 1;
-    this.setStatus({ running: false, starting: this.crashes <= 5, failed: this.crashes > 5 });
-    if (this.crashes > 5) return;
+    const retry = this.keyboardOnly || this.crashes <= 5;
+    this.setStatus({ running: false, starting: retry, failed: !retry, ...(this.keyboardOnly ? { hookActive: false } : {}) });
+    if (!retry) return;
     this.restartTimer = setTimeout(() => {
       this.restartTimer = null;
       this.start(this.restartOptions());
-    }, 2000 * this.crashes);
+    }, this.keyboardOnly ? Math.min(10000, 2000 * this.crashes) : 2000 * this.crashes);
   }
 
   restartOptions() {
@@ -216,6 +228,7 @@ class Sensors extends EventEmitter {
 
   setHook(on) {
     this.hook = on;
+    this.lastReading = Date.now();
     this.send(`hook ${on ? 'on' : 'off'}`);
   }
 

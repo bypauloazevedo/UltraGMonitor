@@ -38,6 +38,7 @@ if (!hasLock) app.quit();
 
 let overlay = null;
 let sensors = null;
+let keyboard = null;
 let weather = null;
 let tray = null;
 let settingsWin = null;
@@ -82,6 +83,7 @@ function state() {
     displays: displayList(),
     hotkeys: hotkeys(),
     hotkeyStatus,
+    captureShortcut: keyboard ? keyboard.status : null,
     version: app.getVersion(),
     update: updates ? updates.latest : null,
     folders: { shots: folders.folder('shots'), videos: folders.folder('videos') },
@@ -192,7 +194,7 @@ function applySettings(patch) {
     else sensors.setFps(on && next.fpsEnabled);
     overlay.refreshVisibility();
   }
-  if (patch.captureWinShiftS !== undefined) sensors.setHook(!!next.captureWinShiftS);
+  if (patch.captureWinShiftS !== undefined) setCaptureShortcut(!!next.captureWinShiftS);
   if (patch.shotsFolder !== undefined || patch.videosFolder !== undefined) broadcast('state', state());
   if (patch.city !== undefined) weather.refresh();
   if (patch.hotkeys !== undefined) registerHotkeys();
@@ -210,6 +212,7 @@ function applySettings(patch) {
 }
 
 function openSettings() {
+  if (capture && capture.busy) capture.close();
   if (settingsWin && !settingsWin.isDestroyed()) {
     settingsWin.emit('settings:present');
     return;
@@ -316,8 +319,21 @@ function toggleVisible() {
 function startSensors(elevated) {
   const s = settings.get();
   sensors.monitoring = monitoringOn();
-  sensors.hook = !!s.captureWinShiftS;
   sensors.start({ elevated, fps: s.fpsEnabled && monitoringOn() });
+}
+
+function setCaptureShortcut(on) {
+  if (!keyboard) return;
+  if (!on) {
+    keyboard.stop();
+    keyboard.setStatus({ enabled: false, running: false, starting: false, hookActive: false });
+    return;
+  }
+  keyboard.setStatus({ enabled: true });
+  if (!keyboard.server && !keyboard.status.starting) {
+    keyboard.hook = true;
+    keyboard.start({ elevated: false, fps: false });
+  }
 }
 
 function refreshTray() {
@@ -412,6 +428,7 @@ function createTray() {
 }
 
 function registerHotkeys() {
+  if (capture) capture.releaseKeys();
   globalShortcut.unregisterAll();
   const actions = {
     capture: () => capture.start(),
@@ -430,6 +447,7 @@ function registerHotkeys() {
       hotkeyStatus[name] = 'invalid';
     }
   }
+  if (capture) capture.holdKeys();
   broadcast('state', state());
 }
 
@@ -480,15 +498,17 @@ function registerIpc() {
     background.clear();
     return applySettings({ background: { file: null, kind: null, name: null } });
   });
-  ipcMain.on('overlay:handle', (_e, rect) => overlay.setHandleRect(rect));
-  ipcMain.handle('hotkeys:pause', () => globalShortcut.unregisterAll());
-  ipcMain.handle('hotkeys:resume', () => registerHotkeys());
-  ipcMain.handle('capture:image', () => capture.image());
-  ipcMain.on('capture:ready', () => capture.ready());
-  ipcMain.handle('capture:copy', (_e, png) => capture.copy(png));
-  ipcMain.handle('capture:save', (_e, png) => capture.save(png));
-  ipcMain.handle('capture:pin', (_e, png, rect) => capture.pin(png, rect));
-  ipcMain.on('capture:close', () => capture.close());
+  ipcMain.on('overlay:handle', (e, rect) => { if (e.sender === overlay.win?.webContents) overlay.setHandleRect(rect); });
+  ipcMain.handle('hotkeys:pause', () => { globalShortcut.unregisterAll(); if (keyboard) keyboard.setHook(false); });
+  ipcMain.handle('hotkeys:resume', () => { registerHotkeys(); if (keyboard && settings.get().captureWinShiftS) keyboard.setHook(true); });
+  ipcMain.handle('capture:image', (e) => capture.image(e.sender));
+  ipcMain.on('capture:ready', (e, session) => { if (capture.owns(e.sender)) capture.ready(session, e.sender); });
+  ipcMain.on('capture:select', (e, session) => capture.select(session, e.sender));
+  ipcMain.on('capture:options', (e, value) => capture.setOptions(value?.session, e.sender, value));
+  ipcMain.handle('capture:copy', (e, png) => capture.use(e.sender) ? capture.copy(png) : false);
+  ipcMain.handle('capture:save', (e, png) => capture.use(e.sender) ? capture.save(png) : false);
+  ipcMain.handle('capture:pin', (e, png, rect) => capture.use(e.sender) ? capture.pin(png, rect) : false);
+  ipcMain.on('capture:close', (e) => { if (capture.owns(e.sender)) capture.close(); });
   ipcMain.handle('capture:ocr', async (e, png) => {
     if (!capture.owns(e.sender)) return { status: 'cancelled' };
     try {
@@ -501,11 +521,11 @@ function registerIpc() {
   ipcMain.handle('capture:copy-text', (e, text) => capture.owns(e.sender) ? capture.copyText(text) : false);
   ipcMain.handle('capture:keys', (e, enabled) => {
     if (!capture.owns(e.sender)) return false;
-    if (enabled === true) capture.holdKeys();
-    else capture.releaseKeys();
+    capture.setKeysEnabled(enabled, e.sender);
     return true;
   });
-  ipcMain.handle('record:start', (_e, cfg) => {
+  ipcMain.handle('record:start', (e, cfg) => {
+    if (!capture.use(e.sender)) return false;
     settings.update({ recordSystemAudio: !!cfg.system, recordMic: !!cfg.mic });
     const display = capture.region();
     if (display) recorder.start({ display, ...cfg });
@@ -524,8 +544,8 @@ function registerIpc() {
     const win = BrowserWindow.fromWebContents(e.sender);
     if (win && win !== overlay.win && win !== settingsWin) win.close();
   });
-  ipcMain.on('overlay:resize', (_e, size) => {
-    if (size && Number.isFinite(size.width) && Number.isFinite(size.height)) overlay.resize(size.width, size.height);
+  ipcMain.on('overlay:resize', (e, size) => {
+    if (e.sender === overlay.win?.webContents && size && Number.isFinite(size.width) && Number.isFinite(size.height)) overlay.resize(size.width, size.height);
   });
 }
 
@@ -561,9 +581,6 @@ app.whenReady().then(() => {
     broadcast('sensors', lastSensors);
   });
   sensors.on('status', () => broadcast('state', state()));
-  sensors.on('key', (name) => {
-    if (name === 'capture' && settings.get().captureWinShiftS) capture.start();
-  });
   if (process.argv.includes('--smoke-test')) {
     let readings = 0;
     sensors.on('data', (data) => {
@@ -596,14 +613,21 @@ app.whenReady().then(() => {
     sensors,
     toast,
     getSettings: () => settings.get(),
-    beforeShot: () => {
-      if (overlay.win && !overlay.win.isDestroyed()) overlay.win.hide();
-    },
-    afterShot: () => overlay.refreshVisibility(),
+    beforeShot: () => overlay.setCapturing(true),
+    afterShot: () => overlay.setCapturing(false),
     onClose: () => { if (ocr) ocr.cancel(); },
   });
+  if (IS_WIN) {
+    keyboard = new Sensors({ exe: paths.keyboardExe(), keyboardOnly: true });
+    keyboard.on('status', () => broadcast('state', state()));
+    keyboard.on('log', (message) => console.log(message));
+    keyboard.on('key', (name) => {
+      if (name === 'capture' && settings.get().captureWinShiftS) capture.start();
+    });
+    setCaptureShortcut(!!s.captureWinShiftS);
+  }
   ocr = new Ocr();
-  history = new History({ toast, getSettings: () => settings.get(), pinFile: (file) => capture.pinFile(file), activeRecording: () => recorder.file && recorder.file.partial });
+  history = new History({ toast, getSettings: () => settings.get(), saveSettings: (patch) => settings.update(patch), pinFile: (file) => capture.pinFile(file), activeRecording: () => recorder.file && recorder.file.partial });
   setTimeout(() => capture.warm(), 1500);
   createTray();
   registerHotkeys();
@@ -629,9 +653,14 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {});
 
+app.on('browser-window-focus', (_event, win) => {
+  if (win === settingsWin && capture && capture.busy) capture.close();
+});
+
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   if (sensors) sensors.stop();
+  if (keyboard) keyboard.stop();
   if (weather) weather.stop();
   if (updates) updates.stop();
   if (ocr) ocr.cancel();

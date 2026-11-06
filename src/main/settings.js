@@ -64,6 +64,8 @@ const DEFAULTS = {
   position: null,
   dock: null,
   layoutBeforeDock: 'card',
+  historyBounds: null,
+  historyMaximized: false,
 };
 
 let current = null;

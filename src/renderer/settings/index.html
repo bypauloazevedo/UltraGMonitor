@@ -240,6 +240,7 @@
           </span>
           <input type="checkbox" id="captureWinShiftS" class="switch" />
         </label>
+          <small class="help win-only" id="capture-shortcut-status" role="status" aria-live="polite"></small>
         <small class="help" id="hotkey-help">Clique no atalho e aperte a tecla ou a combinação. Esc cancela, Backspace remove.</small>
         <small class="help win-only">Pra usar a Print Screen, desligue no Windows: Configurações → Acessibilidade → Teclado → "Usar a tecla Print Screen para abrir a captura de tela".</small>
         <small class="help linux-only">No Ubuntu com Wayland, os atalhos do app só funcionam com ele em foco. Crie um atalho do sistema (Configurações → Teclado → Atalhos personalizados) com o comando "ultragmonitor --capture". Também valem --record e --history.</small>
@@ -287,7 +288,7 @@
             <button data-value="list">Lista</button>
             <button data-value="tall">Em pé</button>
           </div>
-          <small class="help">Em pé põe o nome em cima e os valores embaixo. Fica estreito e comprido, bom pra lateral da tela.</small>
+          <small class="help">Em pé centraliza hora, data e clima no topo. Lista reúne essas informações numa linha.</small>
         </div>
         <div class="field">
           <span class="label">Tamanho geral <output id="scale-out" class="num"></output></span>

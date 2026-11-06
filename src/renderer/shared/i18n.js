@@ -7,6 +7,13 @@
   const LOCALES = { pt: 'pt-BR', en: 'en-US', es: 'es-ES' };
 
   const en = {
+    'Em pé centraliza hora, data e clima no topo. Lista reúne essas informações numa linha.': 'Tall centers the time, date and weather at the top. List puts them on one line.',
+    'Atalho do Windows mantido.': 'Windows shortcut unchanged.',
+    'Atalho em pausa enquanto você edita uma combinação.': 'Shortcut paused while you edit a combination.',
+    'Ajudante do atalho não encontrado. Reinstale o app ou compile o ajudante de teclado.': 'Shortcut helper not found. Reinstall the app or build the keyboard helper.',
+    'Win+Shift+S ativo. Ctrl+Win+Shift+S também funciona.': 'Win+Shift+S is active. Ctrl+Win+Shift+S also works.',
+    'Ativando o atalho de captura…': 'Enabling the capture shortcut…',
+    'Atalho indisponível. Tentando reconectar…': 'Shortcut unavailable. Trying to reconnect…',
     'UltraGMonitor · Configurações': 'UltraGMonitor · Settings',
     'Configurações': 'Settings',
     'Configurações…': 'Settings…',
@@ -238,6 +245,13 @@
   };
 
   const es = {
+    'Em pé centraliza hora, data e clima no topo. Lista reúne essas informações numa linha.': 'Vertical centra la hora, la fecha y el clima arriba. Lista los reúne en una línea.',
+    'Atalho do Windows mantido.': 'Atajo de Windows sin cambios.',
+    'Atalho em pausa enquanto você edita uma combinação.': 'Atajo en pausa mientras editas una combinación.',
+    'Ajudante do atalho não encontrado. Reinstale o app ou compile o ajudante de teclado.': 'No se encontró el asistente del atajo. Reinstala la app o compila el asistente del teclado.',
+    'Win+Shift+S ativo. Ctrl+Win+Shift+S também funciona.': 'Win+Shift+S está activo. Ctrl+Win+Shift+S también funciona.',
+    'Ativando o atalho de captura…': 'Activando el atajo de captura…',
+    'Atalho indisponível. Tentando reconectar…': 'Atajo no disponible. Intentando reconectar…',
     'UltraGMonitor · Configurações': 'UltraGMonitor · Ajustes',
     'Configurações': 'Ajustes',
     'Configurações…': 'Ajustes…',

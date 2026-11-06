@@ -92,7 +92,8 @@ grid.addEventListener('keydown', (e) => {
   const current = e.target.closest('.item');
   if (!current) return;
   const index = Number(current.dataset.index);
-  const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 2, ArrowUp: -2 }[e.key];
+  const columns = getComputedStyle(grid).gridTemplateColumns.split(' ').length;
+  const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: columns, ArrowUp: -columns }[e.key];
   if (step === undefined) return;
   e.preventDefault();
   const next = grid.querySelector(`.item[data-index="${index + step}"]`);

@@ -793,6 +793,11 @@ kbd {
   border: 0;
   transform-origin: top left;
   pointer-events: none;
+  visibility: hidden;
+}
+
+.widget-preview iframe.is-ready {
+  visibility: visible;
 }
 
 .font-grid button {

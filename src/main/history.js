@@ -7,7 +7,8 @@ const { t } = require('../renderer/shared/i18n');
 const { HistoryFiles } = require('./history-files');
 
 const LIMIT = 30;
-const SIZE = { width: 460, height: 560 };
+const SIZE = { width: 760, height: 620 };
+const MIN_SIZE = { width: 460, height: 360 };
 const IMAGE = /\.(png|jpe?g|webp|bmp)$/i;
 const VIDEO = /\.(mp4|webm|mkv)$/i;
 
@@ -26,9 +27,10 @@ async function thumbnail(item) {
 }
 
 class History {
-  constructor({ toast, getSettings, pinFile, activeRecording = () => null }) {
+  constructor({ toast, getSettings, saveSettings = () => {}, pinFile, activeRecording = () => null }) {
     this.toast = toast;
     this.getSettings = getSettings;
+    this.saveSettings = saveSettings;
     this.pinFile = pinFile;
     this.activeRecording = activeRecording;
     this.win = null;
@@ -49,27 +51,36 @@ class History {
     return this.items.some((item) => item.file === file);
   }
 
-  open() {
-    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  bounds() {
+    const saved = this.getSettings().historyBounds;
+    const display = saved ? screen.getDisplayMatching(saved) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
     const area = display.workArea;
-    const bounds = {
-      x: Math.round(area.x + (area.width - SIZE.width) / 2),
-      y: Math.round(area.y + (area.height - SIZE.height) / 2),
-      ...SIZE,
+    const width = Math.min(area.width, Math.max(MIN_SIZE.width, saved ? saved.width : SIZE.width));
+    const height = Math.min(area.height, Math.max(MIN_SIZE.height, saved ? saved.height : SIZE.height));
+    return {
+      x: Math.round(saved ? Math.max(area.x, Math.min(saved.x, area.x + area.width - width)) : area.x + (area.width - width) / 2),
+      y: Math.round(saved ? Math.max(area.y, Math.min(saved.y, area.y + area.height - height)) : area.y + (area.height - height) / 2),
+      width,
+      height,
     };
+  }
+
+  open() {
     if (this.win && !this.win.isDestroyed()) {
-      this.win.setBounds(bounds);
       this.win.webContents.send('history:refresh');
       this.win.show();
       this.win.focus();
       return;
     }
+    const maximized = this.getSettings().historyMaximized;
     const win = new BrowserWindow({
-      ...bounds,
+      ...this.bounds(),
+      minWidth: MIN_SIZE.width,
+      minHeight: MIN_SIZE.height,
       frame: false,
-      resizable: false,
+      resizable: true,
       minimizable: false,
-      maximizable: false,
+      maximizable: true,
       fullscreenable: false,
       skipTaskbar: true,
       alwaysOnTop: true,
@@ -85,12 +96,18 @@ class History {
     });
     win.loadFile(paths.page('history'));
     win.once('ready-to-show', () => {
+      if (maximized) win.maximize();
       win.show();
       win.focus();
     });
     win.on('blur', () => {
       if (!this.menuOpen && !win.isDestroyed()) win.hide();
     });
+    const remember = () => {
+      if (win.isDestroyed() || win.isMinimized()) return;
+      this.saveSettings({ historyBounds: win.getNormalBounds(), historyMaximized: win.isMaximized() });
+    };
+    for (const event of ['resize', 'move', 'maximize', 'unmaximize', 'hide', 'close']) win.on(event, remember);
     win.on('closed', () => {
       this.win = null;
     });

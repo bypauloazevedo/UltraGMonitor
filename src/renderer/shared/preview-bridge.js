@@ -3,6 +3,7 @@ if (new URLSearchParams(location.search).has('preview') && window.parent !== win
   const listeners = new Map();
   let snapshot;
   let ready;
+  let lastSize = '';
   const initial = new Promise((resolve) => { ready = resolve; });
   const subscribe = (name) => (callback) => {
     if (!listeners.has(name)) listeners.set(name, []);
@@ -26,7 +27,13 @@ if (new URLSearchParams(location.search).has('preview') && window.parent !== win
   window.hud = {
     getSettings: () => request('settings'), lastSensors: () => request('sensors'), getState: () => request('state'), lastWeather: () => request('weather'),
     dockInfo: async () => ({ height: 48, light: false }),
-    resize: (width, height) => window.parent.postMessage({ type: 'preview:size', width, height }, '*'),
+    resize: (width, height) => {
+      if (width <= 0 || height <= 0) return;
+      const size = `${Math.ceil(width)}:${Math.ceil(height)}`;
+      if (size === lastSize) return;
+      lastSize = size;
+      window.parent.postMessage({ type: 'preview:size', width, height }, '*');
+    },
     setHandleRect: () => {}, setSettings: () => {}, openSettings: () => {}, restartSensors: () => {},
     onSettings: subscribe('settings'), onSensors: subscribe('sensors'), onState: subscribe('state'), onWeather: subscribe('weather'),
     onDock: subscribe('dock'), onPeek: subscribe('peek'), onHandle: subscribe('handle'),

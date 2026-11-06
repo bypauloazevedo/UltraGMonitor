@@ -9,6 +9,7 @@ function fromResources(dev, packaged) {
 
 module.exports = {
   sensorExe: () => fromResources(['sensor', 'out', 'UltraGMonitor.Sensor.exe'], ['sensor', 'UltraGMonitor.Sensor.exe']),
+  keyboardExe: () => fromResources(['keyboard', 'out', 'UltraGMonitor.Keys.exe'], ['keyboard', 'UltraGMonitor.Keys.exe']),
   presentMonExe: () => fromResources(['resources', 'presentmon', 'PresentMon.exe'], ['presentmon', 'PresentMon.exe']),
   asset: (name) => path.join(root, 'assets', name),
   page: (name) => path.join(root, 'src', 'renderer', name, 'index.html'),
