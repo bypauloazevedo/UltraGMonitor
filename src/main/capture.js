@@ -205,9 +205,15 @@ class Capture {
 
   fail(display) {
     const windows = new Set([this.win, ...Array.from(this.windows.values(), target => target.win)]);
+    const focused = BrowserWindow.getFocusedWindow();
+    const returnFocus = windows.has(focused) ? this.returnFocus : focused;
     this.close();
     for (const win of windows) if (win && !win.isDestroyed()) win.destroy();
     this.toast.show(t('Não deu pra capturar a tela. Tente de novo.'), 'error', display);
+    if (!this.quitting && returnFocus && !returnFocus.isDestroyed() && returnFocus.isVisible() && BrowserWindow.getFocusedWindow() !== returnFocus) {
+      returnFocus.focus();
+      returnFocus.webContents.focus();
+    }
   }
 
   target(sender) {

@@ -418,8 +418,9 @@ function captureFixture(displays = [{ id: 1, bounds: { x: 0, y: 0, width: 640, h
   let id = 0;
   let focused = true;
   const previous = { isDestroyed: () => false, isVisible: () => true, focus: () => calls.push('focus'), webContents: { focus() {} } };
+  let foreground = previous;
   const { Capture } = load('src/main/capture.js', { electron: {
-    app: { on() {} }, BrowserWindow: { getFocusedWindow: () => previous },
+    app: { on() {} }, BrowserWindow: { getFocusedWindow: () => foreground },
     screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }), getDisplayNearestPoint: () => displays[0], getAllDisplays: () => displays },
     globalShortcut: { isRegistered: (key) => shortcuts.has(key), register: (key) => { shortcuts.add(key); return true; }, unregister: (key) => shortcuts.delete(key) },
   } }, { setTimeout: (fn, ms) => { timers.set(++id, { fn, ms }); return id; }, clearTimeout: (timer) => timers.delete(timer) });
@@ -433,8 +434,24 @@ function captureFixture(displays = [{ id: 1, bounds: { x: 0, y: 0, width: 640, h
   capture.targets = Array.from(capture.windows.values());
   capture.win = capture.targets[0].win;
   capture.warm = () => Promise.resolve();
-  return { capture, shortcuts, timers, sent, calls, focus: (value) => { focused = value; } };
+  return { capture, shortcuts, timers, sent, calls, previous, foreground: value => { foreground = value; }, focus: (value) => { focused = value; } };
 }
+
+test('Falha da captura preserva o foco das configurações sem ativar o app sobre o jogo', () => {
+  const fixture = captureFixture();
+  fixture.capture.busy = true;
+  fixture.focus(false);
+  fixture.capture.win.destroy = () => fixture.foreground(null);
+  fixture.capture.fail({});
+  assert.deepEqual(fixture.calls, ['after', 'error', 'focus']);
+  const game = captureFixture();
+  game.capture.busy = true;
+  game.capture.returnFocus = game.previous;
+  game.focus(false);
+  game.foreground(null);
+  game.capture.fail({});
+  assert.deepEqual(game.calls, ['after', 'error']);
+});
 
 test('Atalhos da captura só atuam com a janela focada e respeitam a edição de texto', () => {
   const { capture, shortcuts, focus } = captureFixture();
