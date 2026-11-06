@@ -28,6 +28,19 @@ Capture.prototype.grab = async function () {
   const pixels = Buffer.alloc(640 * 360 * 4, 255);
   return { pixels, width: 640, height: 360, format: 'rgba' };
 };
+const fail = Capture.prototype.fail;
+const focusState = () => ({
+  foco: BrowserWindow.getFocusedWindow()?.getTitle() || null,
+  retorno: capture?.returnFocus?.isDestroyed() === false ? capture.returnFocus.getTitle() : null,
+  janelas: BrowserWindow.getAllWindows().map(win => ({ titulo: win.getTitle(), visivel: win.isVisible(), focada: win.isFocused(), aceitaFoco: win.isFocusable() })),
+});
+Capture.prototype.fail = function (display) {
+  console.log(JSON.stringify({ etapa: 'antes da recuperação', ...focusState() }));
+  const result = fail.call(this, display);
+  console.log(JSON.stringify({ etapa: 'depois da recuperação', ...focusState() }));
+  setTimeout(() => console.log(JSON.stringify({ etapa: 'foco confirmado após recuperação', ...focusState() })), 200);
+  return result;
+};
 const errors = [];
 app.on('browser-window-created', (_event, win) => {
   win.webContents.on('preload-error', (_e, _file, error) => errors.push(error.message));
