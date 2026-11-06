@@ -16,6 +16,7 @@ run([path.join(__dirname, 'prepare-ocr.js')]);
 if (windows) {
   run([path.join(__dirname, 'fetch-deps.js')]);
   run([path.join(__dirname, 'build-sensor.js')]);
+  run([path.join(__dirname, 'build-keyboard.js')]);
 }
 fs.rmSync(work, { recursive: true, force: true });
 run([require.resolve('electron-builder/cli.js'), ...(windows ? ['--win', 'nsis'] : ['--linux', 'AppImage', 'deb']), '--publish', 'never']);

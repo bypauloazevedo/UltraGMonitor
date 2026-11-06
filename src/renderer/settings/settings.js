@@ -25,7 +25,7 @@ function updatePreview() {
   if (!previewFrame) return;
   previewFrame.contentWindow.postMessage({
     type: 'preview:update', visible: activeTab === 'aparencia',
-    settings: { ...settings, locked: true, hidden: false },
+    settings: { ...settings, locked: true, hidden: false, position: null },
     sensors, state: appState, weather: previewWeather,
   }, '*');
 }
@@ -47,8 +47,11 @@ function initPreview() {
   window.addEventListener('message', (event) => {
     if (!previewFrame || event.source !== previewFrame.contentWindow || !event.data) return;
     if (event.data.type === 'preview:ready') updatePreview();
-    if (event.data.type === 'preview:size' && Number.isFinite(event.data.width) && Number.isFinite(event.data.height)) {
-      previewSize = { width: Math.max(1, event.data.width), height: Math.max(1, event.data.height) };
+    if (event.data.type === 'preview:size' && Number.isFinite(event.data.width) && event.data.width > 0 && Number.isFinite(event.data.height) && event.data.height > 0) {
+      const size = { width: Math.ceil(event.data.width), height: Math.ceil(event.data.height) };
+      if (size.width === previewSize.width && size.height === previewSize.height && previewFrame.classList.contains('is-ready')) return;
+      previewSize = size;
+      previewFrame.classList.add('is-ready');
       fitWidgetPreview();
       scheduleLayout();
     }
@@ -463,6 +466,16 @@ function pretty(accelerator) {
 }
 
 function renderHotkeys() {
+  const hook = appState && appState.captureShortcut;
+  const hookStatus = $('capture-shortcut-status');
+  const message = !settings.captureWinShiftS ? 'Atalho do Windows mantido.'
+    : recording ? 'Atalho em pausa enquanto você edita uma combinação.'
+    : hook && hook.missing ? 'Ajudante do atalho não encontrado. Reinstale o app ou compile o ajudante de teclado.'
+    : hook && hook.hookActive ? 'Win+Shift+S ativo. Ctrl+Win+Shift+S também funciona.'
+    : !hook || hook.starting ? 'Ativando o atalho de captura…'
+    : 'Atalho indisponível. Tentando reconectar…';
+  hookStatus.textContent = t(message);
+  hookStatus.classList.toggle('error', !!settings.captureWinShiftS && !!hook && !hook.hookActive && !hook.starting && !recording);
   const wrap = $('hotkeys');
   const keys = settings.hotkeys || {};
   const status = (appState && appState.hotkeyStatus) || {};
@@ -621,6 +634,12 @@ function makeColumns(count) {
   });
 }
 
+function placeSection(parent, section, before = null) {
+  if (section.parentElement === parent && section.nextElementSibling === before) return;
+  if (parent.moveBefore && parent.isConnected && section.isConnected) parent.moveBefore(section, before);
+  else parent.insertBefore(section, before);
+}
+
 function partition(heights, count, gap) {
   const n = heights.length;
   const total = (a, b) => heights.slice(a, b).reduce((s, h) => s + h, 0) + gap * Math.max(0, b - a - 1);
@@ -649,14 +668,18 @@ function layoutColumns() {
   const visible = sections.filter((s) => s.dataset.tab === activeTab && !(isLinux() && s.classList.contains('win-only')));
   const count = Math.max(1, Math.min(3, visible.length, Math.floor((inner + gap) / (COLUMN_MIN + gap))));
   for (const s of sections) {
-    if (!visible.includes(s) && s.parentElement !== stash) stash.appendChild(s);
+    if (!visible.includes(s) && s.parentElement !== stash) placeSection(stash, s);
   }
-  if (visible.some((s) => !main.contains(s)) || main.children.length !== count) {
-    layoutKey = '';
-    main.style.setProperty('--cols', String(count));
-    const columns = makeColumns(count);
-    visible.forEach((s, i) => columns[i % count].appendChild(s));
-    main.replaceChildren(...columns);
+  main.style.setProperty('--cols', String(count));
+  const columns = [...main.children].filter(element => element.classList.contains('col'));
+  while (columns.length < count) {
+    const column = makeColumns(1)[0];
+    main.appendChild(column);
+    columns.push(column);
+  }
+  const current = columns.slice(0, count);
+  if (visible.some(section => !current.includes(section.parentElement))) {
+    visible.forEach((section, i) => placeSection(current[i % count], section));
   }
   const grown = visible.filter((s) => s.classList.contains('grow'));
   grown.forEach((s) => s.classList.remove('grow'));
@@ -667,14 +690,16 @@ function layoutColumns() {
     return;
   }
   layoutKey = key;
-  main.style.setProperty('--cols', String(count));
-  const columns = makeColumns(count);
   const ranges = partition(heights, count, gap);
   ranges.forEach(([a, b], i) => {
-    for (let j = a; j < b; j++) columns[i].appendChild(visible[j]);
+    let before = null;
+    for (let j = b - 1; j >= a; j--) {
+      placeSection(current[i], visible[j], before);
+      before = visible[j];
+    }
     if (count > 1) visible[b - 1].classList.add('grow');
   });
-  main.replaceChildren(...columns);
+  for (const column of columns.slice(count)) column.remove();
   requestAnimationFrame(fitPreviews);
 }
 

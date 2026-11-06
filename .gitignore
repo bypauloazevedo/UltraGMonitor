@@ -3,6 +3,7 @@ dist/
 sensor/bin/
 sensor/obj/
 sensor/out/
+keyboard/out/
 resources/presentmon/*.exe
 resources/pawnio/*.exe
 .build/

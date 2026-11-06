@@ -64,6 +64,10 @@ let size = 4;
 let drag = null;
 let editing = null;
 let frame = 0;
+let captureSession = 0;
+let sessionId = null;
+let toolbarActive = false;
+let blurTimer = 0;
 let mode = 'shot';
 let audio = { system: true, mic: false };
 const ocr = new window.CaptureOcr({
@@ -197,7 +201,7 @@ function layout() {
   selBox.hidden = !hasSel;
   sizeLabel.hidden = !hasSel;
   hint.hidden = !!hasSel;
-  bar.hidden = ocr.opened || !!(drag && drag.kind === 'new');
+  bar.hidden = !toolbarActive || ocr.opened || !!(drag && drag.kind === 'new');
   for (const button of bar.querySelectorAll('[data-act="copy"], [data-act="save"], [data-act="pin"], [data-act="ocr"], [data-act="record"]')) button.disabled = !hasSel;
   const undo = bar.querySelector('[data-act="undo"]');
   const redo = bar.querySelector('[data-act="redo"]');
@@ -333,6 +337,11 @@ function markBar() {
 
 function remember() {
   window.hud.setSettings({ capture: { color, size } });
+  shareOptions();
+}
+
+function shareOptions() {
+  if (toolbarActive) window.hud.captureOptions({ session: sessionId, mode, tool, color, size, audio });
 }
 
 bar.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -353,6 +362,7 @@ bar.addEventListener('click', (e) => {
     mode = m.dataset.mode;
     tool = null;
     buildBar();
+    shareOptions();
     schedule();
     return;
   }
@@ -360,6 +370,7 @@ bar.addEventListener('click', (e) => {
   if (au) {
     audio[au.dataset.audio] = !audio[au.dataset.audio];
     markAudio();
+    shareOptions();
     showTip(au);
     return;
   }
@@ -368,6 +379,7 @@ bar.addEventListener('click', (e) => {
     commitText();
     tool = tool === t.dataset.tool ? null : t.dataset.tool;
     markBar();
+    shareOptions();
     schedule();
     return;
   }
@@ -485,6 +497,7 @@ selBox.addEventListener('pointerdown', (e) => {
   if (ocr.opened) return;
   const h = handleAt(e);
   if (!h) return;
+  window.hud.captureSelect(sessionId);
   e.stopPropagation();
   view.setPointerCapture(e.pointerId);
   drag = { kind: 'resize', h, start: toImage(e), orig: { ...sel } };
@@ -493,6 +506,8 @@ selBox.addEventListener('pointerdown', (e) => {
 view.addEventListener('pointerdown', (e) => {
   if (ocr.opened) return;
   if (e.button !== 0) return;
+  if (!base) return;
+  window.hud.captureSelect(sessionId);
   const p = toImage(e);
   if (editing) {
     commitText();
@@ -640,8 +655,41 @@ function toImageData(shot) {
   return new ImageData(pixels, shot.width, shot.height);
 }
 
-async function begin() {
+function release() {
+  captureSession++;
+  sessionId = null;
+  toolbarActive = false;
+  ocr.close(false);
+  if (frame) cancelAnimationFrame(frame);
+  frame = 0;
+  clearTimeout(blurTimer);
+  blurTimer = 0;
+  if (base && base.close) base.close();
+  base = null;
+  blurred = null;
+  shapes = [];
+  undone = [];
+  sel = null;
+  draft = null;
+  tool = null;
+  drag = null;
+  editing = null;
+  selBox.hidden = true;
+  sizeLabel.hidden = true;
+  hint.hidden = true;
+  bar.hidden = true;
+  textInput.hidden = true;
+  hideTip();
+  view.width = 1;
+  view.height = 1;
+}
+
+async function begin(session) {
+  release();
+  sessionId = session;
+  const current = captureSession;
   const [settings, shot] = await Promise.all([window.hud.getSettings(), window.hud.captureImage()]);
+  if (current !== captureSession) return;
   if (!shot) return window.hud.captureClose();
   window.HudI18n.setLang(settings.language);
   window.HudI18n.apply();
@@ -652,40 +700,44 @@ async function begin() {
   if (!palette.includes(color)) color = palette[0];
   size = (settings.capture && settings.capture.size) || 4;
   mode = shot.mode === 'video' ? 'video' : 'shot';
+  toolbarActive = shot.toolbarActive !== false;
   audio = { system: settings.recordSystemAudio !== false, mic: !!settings.recordMic };
-  if (base && base.close) base.close();
-  base = await createImageBitmap(toImageData(shot));
-  blurred = null;
-  sel = null;
-  shapes = [];
-  undone = [];
-  draft = null;
-  tool = null;
-  drag = null;
-  editing = null;
-  textInput.hidden = true;
+  const image = await createImageBitmap(toImageData(shot));
+  if (current !== captureSession) {
+    image.close();
+    return;
+  }
+  base = image;
   view.width = base.width;
   view.height = base.height;
   ratio = base.width / (shot.cssWidth || window.innerWidth);
   buildBar();
   frame = 0;
   render();
-  window.hud.captureReady();
-  setTimeout(buildBlurred, 200);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  if (current !== captureSession) return;
+  window.hud.captureReady(session);
+  blurTimer = setTimeout(() => {
+    blurTimer = 0;
+    if (document.hasFocus()) buildBlurred();
+  }, 200);
 }
 
 window.hud.onCaptureStart(begin);
-window.hud.onCaptureRelease(() => {
-  ocr.close(false);
-  if (frame) cancelAnimationFrame(frame);
-  frame = 0;
-  if (base && base.close) base.close();
-  base = null;
-  blurred = null;
-  shapes = [];
-  undone = [];
-  sel = null;
-  draft = null;
-  view.width = 1;
-  view.height = 1;
+window.hud.onCaptureRelease(release);
+window.hud.onCaptureToolbar((value) => {
+  if (!base || value.session !== sessionId) return;
+  toolbarActive = value.active === true;
+  if (!toolbarActive) hideTip();
+  schedule();
+});
+window.hud.onCaptureOptions((value) => {
+  if (!base || value.session !== sessionId) return;
+  mode = value.mode;
+  tool = value.tool;
+  color = value.color;
+  size = value.size;
+  audio = value.audio;
+  buildBar();
+  schedule();
 });

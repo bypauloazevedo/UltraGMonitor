@@ -1,5 +1,37 @@
 # Histórico de versões
 
+## 0.6.0 — 2026-11-06
+
+### Correções e melhorias
+
+- Prévia ao vivo preserva sua tela ao redimensionar o widget, reorganizar as colunas ou trocar de aba. Os controles mantêm o foco e a prévia não pode alterar as dimensões da janela do widget.
+- Win+Shift+S ganhou um ajudante próprio, separado dos sensores, com recuperação automática e estado do atalho nas configurações. Ctrl+Win+Shift+S também abre a captura quando a opção está ligada.
+- A mesma sessão de captura permite selecionar uma área em qualquer monitor, preservando a escala e a imagem de cada tela. Esc encerra a sessão em todas as telas.
+- A captura mostra uma única barra de ferramentas: começa na tela principal e acompanha a seleção em outro monitor, preservando o modo de print ou vídeo e os ajustes das ferramentas.
+- Compacto mostra hora, data e clima no topo, antes dos monitoramentos.
+- Monitoramentos do Compacto usam linha única, nomes maiores e uso junto da temperatura ou memória, com a fonte configurada para o Monitor. A largura acompanha os nomes do hardware.
+- Últimos prints permite redimensionar e maximizar a janela, guarda tamanho e posição e adapta a grade ao espaço disponível.
+- Comando `npm run atalho:teste` cria um executável no menu Iniciar ligado ao código atual do projeto, com o ícone oficial e sem depender de uma pasta interna do ambiente de desenvolvimento.
+- Compacto preserva os nomes e valores completos e mantém os textos dos botões de estilo legíveis no menu de edição.
+- Menu rápido recupera os cliques na setinha e no Pronto ao sair da captura, inclusive depois de vários cancelamentos seguidos. O menu aberto é preservado.
+- Nova captura limpa a seleção anterior e aguarda o novo quadro antes de aparecer, evitando a piscada da área marcada no print anterior.
+- Painel lateral continua visível ao tirar um print, inclusive quando ele faz parte da área capturada.
+- Configurações recuperam o foco e os controles após copiar, salvar ou cancelar uma captura. Voltar às configurações encerra a seleção que estava por cima.
+- Captura aguarda o carregamento da janela, libera os atalhos ao perder o foco e se recupera de falhas sem deixar o painel escondido ou uma janela bloqueando a tela.
+- Falha na captura preserva o foco das configurações ao descartar as janelas temporárias, sem ativar o app sobre um jogo em primeiro plano.
+- Widget preserva a janela ativa do app ao mudar sua interação para a captura; o retorno de foco durante a preparação não cancela a seleção antes de ela aparecer.
+- Testes locais não abrem janelas visíveis por padrão. Verificações que usam a área de trabalho exigem ativação explícita.
+
+### Downloads e compatibilidade
+
+- **Windows 10/11, 64 bits:** `UltraGMonitor-Setup.exe`. Instale por cima da versão anterior para manter as configurações.
+- **Ubuntu, Mint e derivados do Debian:** `UltraGMonitor-linux-amd64.deb`.
+- **Outras distribuições Linux:** `UltraGMonitor-linux-x86_64.AppImage`.
+
+Os executáveis do Windows ainda não têm assinatura digital. O Controle Inteligente de Aplicativos pode bloquear componentes do app; esta versão não desativa nem altera a proteção do Windows. O Linux continua em beta, com as limitações de FPS, Dock, atalhos no Wayland e áudio do PC.
+
+[Todas as mudanças desde a 0.5.0](https://github.com/bypauloazevedo/UltraGMonitor/compare/v0.5.0...v0.6.0)
+
 ## 0.5.0 — 2026-11-05
 
 ### Novidades

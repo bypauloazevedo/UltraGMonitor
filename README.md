@@ -114,7 +114,8 @@ Se você também vive entre o código e o jogo, ou só quer entender de verdade 
 - **Extrair texto:** selecione uma área com texto e abra uma prévia editável antes de copiar. Dá pra copiar tudo ou só o trecho selecionado. O reconhecimento funciona offline em português, inglês e espanhol, sem cadastro ou serviço pago. Letras pequenas, borradas ou com pouco contraste podem sair erradas; o app avisa pra revisar.
 - Todo print copiado também vira um arquivo PNG na pasta de prints, pra você achar depois.
 - **Últimos prints:** uma janelinha com os prints e vídeos mais recentes. Clique pra copiar de novo, arraste pra soltar direto no chat ou no e-mail, ou use o botão direito pra fixar, abrir, mostrar na pasta ou mandar pra lixeira.
-- No Windows, dá pra usar o **`Win+Shift+S`** pra abrir a captura do UltraGMonitor no lugar da Ferramenta de Captura (opcional, na aba Atalhos).
+- No Windows, dá pra usar o **`Win+Shift+S`** ou **`Ctrl+Win+Shift+S`** pra abrir a captura do UltraGMonitor no lugar da Ferramenta de Captura (opcional, na aba Atalhos). O atalho tem um ajudante próprio, funciona mesmo com os sensores parados e mostra seu estado nas configurações.
+- A seleção abre em todos os monitores: escolha a área na tela que quiser. A barra de ferramentas começa só na tela principal e acompanha a seleção em outra tela, mantendo o modo de print ou vídeo e os ajustes escolhidos. Cada monitor mantém sua escala, inclusive com resoluções e tamanhos de texto diferentes. Esc fecha a captura em todas as telas.
 - Por padrão, prints e vídeos vão pra `Imagens\UltraGMonitor`, em `Prints` e `Vídeos`. Dá pra trocar cada pasta na aba Captura.
 
 ### Gravação de vídeo
@@ -261,6 +262,7 @@ src/main/        processo principal: janelas, bandeja, atalhos, captura, gravaç
 src/preload/     ponte segura entre as telas e o processo principal
 src/renderer/    as telas: widget, configurações, captura, gravação, últimos prints e avisos
 sensor/          ajudante em C# que lê os sensores, o FPS e tira o print no Windows
+keyboard/        ajudante independente do atalho de captura do Windows
 scripts/         baixar dependências, compilar o ajudante, gerar ícones e o instalador
 resources/       PresentMon, PawnIO e scripts do instalador
 assets/          logo e ícones
@@ -278,7 +280,11 @@ npm start
 
 O `npm run setup` baixa o PresentMon e o PawnIO e compila o ajudante em C#.
 
-`npm test` verifica os caminhos de sensores, permissões, RAM, captura, gravação e recuperação das configurações. `npm run test:ui` verifica as telas e grava um vídeo de teste com pausa, retomada e reprodução. No Linux sem ambiente gráfico, use `xvfb-run -a npm run test:ui`.
+O ajudante do atalho de captura é compilado com `npm run build:keyboard`, incluído no setup e no instalador do Windows. Ele roda separado dos sensores e não precisa inicializar a leitura de hardware.
+
+No Windows, `npm run atalho:teste` cria **UltraGMonitor (Teste)** no menu Iniciar. O executável abre o Electron diretamente nesta pasta do projeto: depois de salvar alterações no app, feche e abra pelo atalho para carregar o código novo, sem gerar outro instalador. Se mudar a pasta do projeto, rode o comando de novo. Alterações no ajudante em C# ainda precisam de `npm run build:sensor`.
+
+`npm test` verifica os caminhos de sensores, permissões, RAM, captura, gravação e recuperação das configurações. `npm run test:ui` verifica as telas e grava um vídeo de teste com pausa, retomada e reprodução, sem abrir janelas visíveis. Os testes que abrem configurações e captura na área de trabalho só rodam na automação ou quando habilitados com `npm run test:ui -- --com-janelas`; não use essa opção durante jogos ou outras atividades. No Linux sem ambiente gráfico, use `xvfb-run -a npm run test:ui`.
 
 No Linux, basta o Node.js: rode `npm install` e `npm start`. Lá os sensores são lidos direto pelo app, sem o ajudante em C#.
 
@@ -294,7 +300,7 @@ No Windows sai o instalador `.exe`; no Linux, o `.AppImage` e o `.deb`. Tudo vai
 
 As mudanças de cada versão ficam no [changelog](CHANGELOG.md). Atualize a versão do app e essa lista antes de criar a tag.
 
-Ao criar uma tag `v*` (por exemplo, `v0.5.0`), o GitHub Actions testa e gera os instaladores do Windows e do Linux. A publicação só acontece quando os dois terminam, usando as notas da versão no changelog.
+Ao criar uma tag `v*` (por exemplo, `v0.6.0`), o GitHub Actions testa e gera os instaladores do Windows e do Linux. A publicação só acontece quando os dois terminam, usando as notas da versão no changelog.
 
 ## Contribuindo
 

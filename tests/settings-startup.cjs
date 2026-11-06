@@ -4,6 +4,11 @@ const path = require('path');
 const os = require('os');
 const assert = require('assert/strict');
 
+if (process.env.CI !== 'true' && !process.argv.includes('--com-janelas')) {
+  console.log('Teste com janelas desativado. Use --com-janelas para habilitar.');
+  app.exit(0);
+}
+
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'ultragmonitor-abertura-'));
 app.setPath('userData', output);
 fs.writeFileSync(path.join(output, 'settings.json'), JSON.stringify({ language: 'pt', locked: false, monitoring: false, updateCheck: false, captureWinShiftS: false, hotkeys: { capture: '', record: '', history: '', lock: '', fps: '', visible: '' } }));

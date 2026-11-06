@@ -1,7 +1,7 @@
 {
   "name": "ultragmonitor",
   "productName": "UltraGMonitor",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Monitor de CPU, GPU, RAM, SSD, FPS, relógio e clima que fica num canto da tela",
   "author": "Paulo Azevedo",
   "license": "GPL-3.0-only",
@@ -14,7 +14,9 @@
     "test": "node --test tests/*.test.js",
     "test:ui": "node scripts/check-ui.js",
     "start": "electron .",
-    "setup": "node scripts/fetch-deps.js && npm run build:sensor",
+    "atalho:teste": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/create-test-shortcut.ps1",
+    "setup": "node scripts/fetch-deps.js && npm run build:sensor && npm run build:keyboard",
+    "build:keyboard": "node scripts/build-keyboard.js",
     "build:sensor": "node scripts/build-sensor.js",
     "icons": "electron scripts/make-icons.js",
     "dist": "node scripts/dist.js"
@@ -74,6 +76,10 @@
       "icon": "assets/icon.ico",
       "target": "nsis",
       "extraResources": [
+        {
+          "from": "keyboard/out",
+          "to": "keyboard"
+        },
         {
           "from": "sensor/out",
           "to": "sensor"

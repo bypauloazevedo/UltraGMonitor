@@ -6,7 +6,6 @@ const paths = require('./paths');
 const folders = require('./folders');
 const { t } = require('../renderer/shared/i18n');
 
-const SHOT_FILE = path.join(os.tmpdir(), 'ultragmonitor-shot.rgba');
 const CAPTURE_KEYS = {
   'CommandOrControl+C': 'copy',
   Enter: 'enter',
@@ -31,18 +30,31 @@ class Capture {
     this.afterShot = afterShot;
     this.onClose = onClose;
     this.win = null;
+    this.windows = new Map();
+    this.targets = [];
+    this.toolbar = null;
     this.busy = false;
     this.display = null;
     this.shot = null;
     this.held = [];
+    this.keysEnabled = false;
+    this.loading = null;
+    this.returnFocus = null;
+    this.readyTimer = null;
+    this.session = 0;
     this.quitting = false;
     app.on('before-quit', () => {
       this.quitting = true;
+    });
+    screen?.on?.('display-removed', () => { if (this.busy) this.close(); });
+    screen?.on?.('display-metrics-changed', (_event, _display, metrics) => {
+      if (this.busy && metrics.some(metric => ['bounds', 'scaleFactor', 'rotation'].includes(metric))) this.close();
     });
   }
 
   holdKeys() {
     this.releaseKeys();
+    if (!this.busy || !this.keysEnabled || !this.win || this.win.isDestroyed() || !this.win.isFocused()) return;
     for (const [accelerator, action] of Object.entries(CAPTURE_KEYS)) {
       try {
         if (globalShortcut.isRegistered(accelerator)) continue;
@@ -59,8 +71,34 @@ class Capture {
     this.held = [];
   }
 
+  setKeysEnabled(enabled, sender) {
+    const target = this.target(sender);
+    if (target) {
+      target.keysEnabled = enabled === true;
+      if (target.win !== this.win) return;
+    }
+    this.keysEnabled = enabled === true;
+    if (this.keysEnabled) this.holdKeys();
+    else this.releaseKeys();
+  }
+
   warm() {
-    if (this.win && !this.win.isDestroyed()) return;
+    const displays = screen.getAllDisplays();
+    for (const [id, target] of this.windows) {
+      if (!displays.some(display => display.id === id)) {
+        this.windows.delete(id);
+        if (!target.win.isDestroyed()) target.win.destroy();
+      }
+    }
+    for (const display of displays) this.warmDisplay(display);
+    this.loading = Promise.all(displays.map(display => this.windows.get(display.id).loading));
+    this.loading.catch(() => {});
+    return this.loading;
+  }
+
+  warmDisplay(display) {
+    const existing = this.windows.get(display.id);
+    if (existing && !existing.win.isDestroyed()) { existing.display = display; return; }
     const win = new BrowserWindow({
       width: 800,
       height: 600,
@@ -83,64 +121,153 @@ class Capture {
       },
     });
     win.setAlwaysOnTop(true, 'screen-saver');
-    win.loadFile(paths.page('capture'));
+    const target = { win, display, loading: win.loadFile(paths.page('capture')), shot: null, ready: false, keysEnabled: true };
+    target.loading.catch(() => {});
+    this.windows.set(display.id, target);
+    win.on('focus', () => { if (this.use(win.webContents)) this.holdKeys(); });
+    win.on('blur', () => { if (this.win === win) this.releaseKeys(); });
     win.on('close', (e) => {
       if (this.quitting) return;
       e.preventDefault();
       this.close();
     });
     win.on('closed', () => {
-      this.win = null;
+      if (this.busy && this.targets.includes(target)) this.close();
+      if (this.windows.get(display.id) === target) this.windows.delete(display.id);
+      if (this.win === win) this.win = null;
     });
-    this.win = win;
+    if (!this.win || this.win.isDestroyed()) this.win = win;
   }
 
   async grab(display) {
+    const file = path.join(os.tmpdir(), `ultragmonitor-shot-${process.pid}-${display.id}.rgba`);
     try {
       const rect = screen.dipToScreenRect(null, display.bounds);
-      const result = await this.sensors.shot(rect, SHOT_FILE);
-      return { pixels: fs.readFileSync(SHOT_FILE), width: result.width, height: result.height, format: 'rgba' };
+      const result = await this.sensors.shot(rect, file);
+      return { pixels: fs.readFileSync(file), width: result.width, height: result.height, format: 'rgba' };
     } catch {
       const size = {
         width: Math.round(display.size.width * display.scaleFactor),
         height: Math.round(display.size.height * display.scaleFactor),
       };
       const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: size });
-      const source = sources.find((s) => s.display_id === String(display.id)) || sources[0];
+      const source = sources.find((s) => s.display_id === String(display.id)) || (screen.getAllDisplays().length === 1 && sources.length === 1 ? sources[0] : null);
       if (!source) throw new Error('nenhuma tela encontrada');
       const image = source.thumbnail;
       return { pixels: image.toBitmap(), ...image.getSize(), format: 'bgra' };
+    } finally {
+      try { fs.unlinkSync(file); } catch {}
     }
   }
 
   async start(mode = 'shot') {
     if (this.busy) return;
     this.busy = true;
-    this.warm();
+    const session = ++this.session;
+    this.keysEnabled = true;
+    this.returnFocus = BrowserWindow.getFocusedWindow();
     const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    this.readyTimer = setTimeout(() => {
+      if (!this.busy || session !== this.session) return;
+      this.fail(display);
+    }, 10000);
     try {
+      await this.warm();
+      if (!this.busy || session !== this.session) return;
+      this.targets = screen.getAllDisplays().map(item => this.windows.get(item.id));
+      if (!this.targets.length || this.targets.some(target => !target || target.win.isDestroyed())) throw new Error('monitor indisponível');
+      for (const target of this.targets) {
+        target.ready = false;
+        target.keysEnabled = true;
+      }
+      const active = this.targets.find(target => target.display.id === display.id) || this.targets[0];
+      const primary = screen.getPrimaryDisplay?.() || this.targets[0].display;
+      this.toolbar = this.targets.find(target => target.display.id === primary.id) || this.targets[0];
+      this.win = active.win;
+      this.display = active.display;
       this.beforeShot();
       await new Promise((resolve) => setTimeout(resolve, 50));
-      this.shot = { ...(await this.grab(display)), cssWidth: display.bounds.width, mode };
-      this.display = display;
-      this.win.setBounds(display.bounds);
-      this.win.webContents.send('capture:start');
+      if (!this.busy || session !== this.session) return;
+      const images = await Promise.all(this.targets.map(target => this.grab(target.display)));
+      if (!this.busy || session !== this.session) return;
+      this.targets.forEach((target, index) => {
+        target.shot = { ...images[index], cssWidth: target.display.bounds.width, mode, toolbarActive: target === this.toolbar };
+        target.win.setBounds(target.display.bounds);
+        target.win.webContents.send('capture:start', session);
+      });
+      this.shot = active.shot;
     } catch (err) {
+      if (session !== this.session) return;
       console.error('captura falhou', err);
-      this.busy = false;
-      this.afterShot();
-      this.toast.show(t('Não deu pra capturar a tela. Tente de novo.'), 'error', display);
+      this.fail(display);
     }
   }
 
-  image() {
-    return this.shot;
+  fail(display) {
+    const windows = new Set([this.win, ...Array.from(this.windows.values(), target => target.win)]);
+    const focused = BrowserWindow.getFocusedWindow();
+    const returnFocus = windows.has(focused) ? this.returnFocus : focused;
+    this.close(false);
+    for (const win of windows) if (win && !win.isDestroyed()) win.destroy();
+    this.toast.show(t('Não deu pra capturar a tela. Tente de novo.'), 'error', display);
+    if (!this.quitting && returnFocus && !returnFocus.isDestroyed() && returnFocus.isVisible()) {
+      returnFocus.focus();
+      returnFocus.webContents.focus();
+    }
   }
 
-  ready() {
-    if (!this.win || !this.busy) return;
-    this.win.setBounds(this.display.bounds);
-    this.win.show();
+  target(sender) {
+    return this.targets.find(target => !target.win.isDestroyed() && target.win.webContents === (sender || this.win?.webContents));
+  }
+
+  image(sender) {
+    return this.target(sender)?.shot || (!sender ? this.shot : null);
+  }
+
+  use(sender) {
+    if (!this.owns(sender)) return false;
+    const target = this.target(sender);
+    this.win = target.win;
+    this.display = target.display;
+    this.shot = target.shot;
+    this.keysEnabled = target.keysEnabled;
+    return true;
+  }
+
+  select(session, sender) {
+    if (session !== this.session || !this.targets.every(target => target.ready) || !this.use(sender)) return false;
+    const target = this.target(sender);
+    if (this.toolbar !== target) {
+      this.toolbar = target;
+      for (const item of this.targets) item.win.webContents.send('capture:toolbar', { session, active: item === target });
+    }
+    this.holdKeys();
+    return true;
+  }
+
+  setOptions(session, sender, options) {
+    if (session !== this.session || !this.owns(sender) || this.target(sender) !== this.toolbar || !options) return false;
+    if (!['shot', 'video'].includes(options.mode) || !/^#[0-9a-f]{6}$/i.test(options.color) || !Number.isInteger(options.size) || options.size < 1 || options.size > 20) return false;
+    const tool = ['pen', 'line', 'arrow', 'rect', 'fill', 'circle', 'marker', 'text', 'blur', 'step'].includes(options.tool) ? options.tool : null;
+    const value = { session, mode: options.mode, color: options.color, size: options.size, tool, audio: { system: options.audio?.system === true, mic: options.audio?.mic === true } };
+    for (const target of this.targets) if (target !== this.toolbar) target.win.webContents.send('capture:options', value);
+    return true;
+  }
+
+  ready(session, sender) {
+    if (!this.win || !this.busy || session !== this.session) return;
+    const target = this.target(sender);
+    if (!target || target.ready) return;
+    target.ready = true;
+    target.shot = null;
+    if (target.win === this.win) this.shot = null;
+    if (!this.targets.every(item => item.ready)) return;
+    clearTimeout(this.readyTimer);
+    this.readyTimer = null;
+    for (const item of this.targets) {
+      item.win.setBounds(item.display.bounds);
+      item.win.showInactive();
+    }
     this.win.moveTop();
     this.win.focus();
     this.win.webContents.focus();
@@ -148,19 +275,38 @@ class Capture {
     this.shot = null;
   }
 
-  close() {
-    this.releaseKeys();
-    if (this.win && !this.win.isDestroyed() && this.win.isVisible()) this.win.hide();
-    if (!this.busy) return;
-    this.onClose();
+  close(restoreFocus = true) {
+    const wasBusy = this.busy;
+    const returnFocus = this.returnFocus;
+    const windows = new Set([this.win, ...Array.from(this.windows.values(), target => target.win)]);
+    const focused = Array.from(windows).some(win => win && !win.isDestroyed() && win.isFocused());
     this.busy = false;
+    this.toolbar = null;
+    this.session++;
+    this.returnFocus = null;
+    this.keysEnabled = false;
+    clearTimeout(this.readyTimer);
+    this.readyTimer = null;
+    this.releaseKeys();
+    for (const win of windows) if (win && !win.isDestroyed() && win.isVisible()) win.hide();
+    if (!wasBusy) return;
+    this.onClose();
     this.shot = null;
-    if (this.win && !this.win.isDestroyed()) this.win.webContents.send('capture:release');
+    for (const target of this.targets) {
+      target.shot = null;
+      target.ready = false;
+      if (!target.win.isDestroyed()) target.win.webContents.send('capture:release');
+    }
+    this.targets = [];
     this.afterShot();
+    if (restoreFocus && focused && !this.quitting && returnFocus && !returnFocus.isDestroyed() && returnFocus.isVisible()) {
+      returnFocus.focus();
+      returnFocus.webContents.focus();
+    }
   }
 
   owns(sender) {
-    return this.busy && this.win && !this.win.isDestroyed() && this.win.webContents === sender;
+    return this.busy && !!this.target(sender);
   }
 
   async copyText(text) {
