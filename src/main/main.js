@@ -654,7 +654,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {});
 
 app.on('browser-window-focus', (_event, win) => {
-  if (win === settingsWin && capture && capture.busy) capture.close();
+  if (win === settingsWin && capture?.busy && capture.win && !capture.win.isDestroyed() && capture.win.isVisible()) capture.close();
 });
 
 app.on('will-quit', () => {

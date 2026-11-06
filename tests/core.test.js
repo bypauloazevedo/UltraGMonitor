@@ -437,6 +437,22 @@ function captureFixture(displays = [{ id: 1, bounds: { x: 0, y: 0, width: 640, h
   return { capture, shortcuts, timers, sent, calls, previous, foreground: value => { foreground = value; }, focus: (value) => { focused = value; } };
 }
 
+test('Widget preserva o foco de outra janela do app ao mudar a interação, sem ativá-la sobre o jogo', () => {
+  let restored = 0;
+  const config = { isDestroyed: () => false, focus: () => { restored++; focused = config; }, webContents: { focus() {} } };
+  let focused = config;
+  const { Overlay } = load('src/main/overlay.js', { electron: { BrowserWindow: { getFocusedWindow: () => focused } } });
+  const overlay = new Overlay({ get: () => ({}) }, {});
+  overlay.win = { isDestroyed: () => false, setFocusable: () => { focused = null; }, setIgnoreMouseEvents() {} };
+  overlay.setIgnore(true);
+  assert.equal(focused, config);
+  assert.equal(restored, 1);
+  focused = null;
+  overlay.setIgnore(false);
+  assert.equal(focused, null);
+  assert.equal(restored, 1);
+});
+
 test('Falha da captura preserva o foco das configurações sem ativar o app sobre o jogo', () => {
   const fixture = captureFixture();
   fixture.capture.busy = true;

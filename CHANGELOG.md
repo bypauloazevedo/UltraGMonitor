@@ -19,6 +19,7 @@
 - Configurações recuperam o foco e os controles após copiar, salvar ou cancelar uma captura. Voltar às configurações encerra a seleção que estava por cima.
 - Captura aguarda o carregamento da janela, libera os atalhos ao perder o foco e se recupera de falhas sem deixar o painel escondido ou uma janela bloqueando a tela.
 - Falha na captura preserva o foco das configurações ao descartar as janelas temporárias, sem ativar o app sobre um jogo em primeiro plano.
+- Widget preserva a janela ativa do app ao mudar sua interação para a captura; o retorno de foco durante a preparação não cancela a seleção antes de ela aparecer.
 - Testes locais não abrem janelas visíveis por padrão. Verificações que usam a área de trabalho exigem ativação explícita.
 
 ### Downloads e compatibilidade

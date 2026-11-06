@@ -212,8 +212,13 @@ class Overlay {
   setIgnore(ignore) {
     if (!this.alive() || this.ignoring === ignore) return;
     this.ignoring = ignore;
+    const focused = BrowserWindow.getFocusedWindow?.();
     this.win.setFocusable(!ignore);
     this.win.setIgnoreMouseEvents(ignore);
+    if (focused && focused !== this.win && !focused.isDestroyed()) {
+      focused.focus();
+      focused.webContents.focus();
+    }
   }
 
   applyLock() {
