@@ -94,7 +94,7 @@ app.whenReady().then(async () => {
     app.emit('second-instance', {}, ['app', '--capture']);
     await until(() => !capture.busy && !capture.win, 'A falha deixou uma captura pendurada');
     assert.equal(overlay.isVisible(), true);
-    assert.equal(BrowserWindow.getFocusedWindow(), config);
+    await until(() => BrowserWindow.getFocusedWindow() === config, 'O foco não voltou às configurações depois da falha');
     failShot = false;
     app.emit('second-instance', {}, ['app', '--capture']);
     await until(() => capture.busy && capture.win.isVisible(), 'A captura não recuperou depois da falha');
