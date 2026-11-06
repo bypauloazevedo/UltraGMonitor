@@ -52,8 +52,12 @@ app.whenReady().then(async () => {
       return config && config.isVisible();
     }, 'As configurações não apareceram');
     const js = (code) => config.webContents.executeJavaScript(code);
-    for (const action of ['copy', 'save', 'cancel']) {
+    const focusConfig = async () => {
       config.focus();
+      await until(() => BrowserWindow.getFocusedWindow() === config, 'As configurações não receberam o foco antes da captura');
+    };
+    for (const action of ['copy', 'save', 'cancel']) {
+      await focusConfig();
       await wait(80);
       assert.equal(overlay.isFocusable(), true, 'O menu aberto precisa aceitar foco ao clicar');
       app.emit('second-instance', {}, ['app', '--capture']);
@@ -83,13 +87,14 @@ app.whenReady().then(async () => {
       await until(async () => (await js('window.hud.getSettings()')).opacity > 0.82, 'O controle pelo teclado parou de funcionar');
       await js('window.hud.setSettings({opacity:0.82})');
     }
-    config.focus();
+    await focusConfig();
     app.emit('second-instance', {}, ['app', '--capture']);
     await until(() => capture.busy && capture.win.isVisible(), 'A captura não reabriu');
-    config.focus();
+    await focusConfig();
     await until(() => !capture.busy && !capture.win.isVisible(), 'Voltar às configurações deixou a captura por cima');
     assert.equal(globalShortcut.isRegistered('CommandOrControl+C'), false);
     assert.equal(overlay.isVisible(), true);
+    await focusConfig();
     failShot = true;
     app.emit('second-instance', {}, ['app', '--capture']);
     await until(() => !capture.busy && !capture.win, 'A falha deixou uma captura pendurada');
